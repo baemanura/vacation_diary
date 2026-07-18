@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         name,
         rank,
         role,
+        email,
       })
       .select()
       .single();

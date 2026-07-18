@@ -24,39 +24,38 @@ export default function LoginPage() {
         return;
       }
 
-      const name = parts.slice(0, -1).join(' '); // 마지막 제외 모두
-      const rank = parts[parts.length - 1]; // 마지막
+      const name = parts.slice(0, -1).join(' ');
+      const rank = parts[parts.length - 1];
 
-      // 서버 API로 로그인
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          rank,
-          password,
-        }),
-      });
+      // 프로필에서 이메일 찾기
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('name', name)
+        .eq('rank', rank)
+        .single();
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || '로그인에 실패했습니다.');
+      if (profileError || !profile) {
+        setError('일치하는 계정을 찾을 수 없습니다.');
         return;
       }
 
-      // 세션 저장
-      if (data.session) {
-        await supabase.auth.setSession(data.session);
-        // 로그인 성공 후 대시보드로 이동
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 100);
+      // Supabase 직접 로그인
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile.email || `${name}_${rank}@unit.local`,
+        password,
+      });
+
+      if (signInError) {
+        setError('비밀번호가 일치하지 않습니다.');
+        return;
       }
+
+      // 로그인 성공 후 대시보드로 이동
+      router.push('/dashboard');
     } catch (err) {
       setError('오류가 발생했습니다.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
