@@ -39,6 +39,14 @@ export function addDays(dateString: string, days: number) {
   return date.toISOString().split('T')[0];
 }
 
+export function daysBetweenInclusive(startDate: string, endDate: string) {
+  const [sy, sm, sd] = startDate.split('-').map(Number);
+  const [ey, em, ed] = endDate.split('-').map(Number);
+  const start = Date.UTC(sy, sm - 1, sd);
+  const end = Date.UTC(ey, em - 1, ed);
+  return Math.round((end - start) / 86400000) + 1;
+}
+
 export function formatDate(dateString: string) {
   const date = new Date(dateString + 'T00:00:00');
   return date.toLocaleDateString('ko-KR', {

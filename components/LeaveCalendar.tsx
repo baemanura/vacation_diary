@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getQuotaStatus, getQuotaForDate, formatDateTime, type QuotaSetting } from '@/lib/utils';
+import {
+  getQuotaStatus,
+  getQuotaForDate,
+  formatDateTime,
+  daysBetweenInclusive,
+  type QuotaSetting,
+} from '@/lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LeaveRequest {
@@ -115,6 +121,8 @@ export default function LeaveCalendar() {
 
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const monthName = `${year}년 ${month + 1}월`;
+  const monthFirstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const monthLastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
@@ -346,10 +354,12 @@ export default function LeaveCalendar() {
         </div>
       )}
 
-      {/* 대원별 이달 신청 횟수 */}
+      {/* 대원별 이달 사용일수 */}
       <MonthlyMemberSummary
         leaves={activeLeaves}
         profiles={profiles}
+        firstDay={monthFirstDay}
+        lastDay={monthLastDay}
       />
     </div>
   );
@@ -358,18 +368,29 @@ export default function LeaveCalendar() {
 function MonthlyMemberSummary({
   leaves,
   profiles,
+  firstDay,
+  lastDay,
 }: {
   leaves: LeaveRequest[];
   profiles: Map<string, Profile>;
+  firstDay: string;
+  lastDay: string;
 }) {
-  const counts = new Map<string, { annual: number; sick: number }>();
+  const counts = new Map<string, { annualDays: number; sickDays: number }>();
 
   leaves.forEach((leave) => {
     if (leave.type !== '연가' && leave.type !== '병가') return;
     if (!leave.member_id) return;
-    const entry = counts.get(leave.member_id) || { annual: 0, sick: 0 };
-    if (leave.type === '연가') entry.annual += 1;
-    else entry.sick += 1;
+
+    // 이번 달 범위로 잘라낸 실제 사용일수만 집계한다.
+    const clippedStart = leave.start_date > firstDay ? leave.start_date : firstDay;
+    const clippedEnd = leave.end_date < lastDay ? leave.end_date : lastDay;
+    if (clippedStart > clippedEnd) return;
+    const days = daysBetweenInclusive(clippedStart, clippedEnd);
+
+    const entry = counts.get(leave.member_id) || { annualDays: 0, sickDays: 0 };
+    if (leave.type === '연가') entry.annualDays += days;
+    else entry.sickDays += days;
     counts.set(leave.member_id, entry);
   });
 
@@ -384,9 +405,9 @@ function MonthlyMemberSummary({
 
   return (
     <div className="mt-6 pt-6 border-t border-gray-200">
-      <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 신청 횟수</h3>
+      <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수</h3>
       {summary.length === 0 ? (
-        <p className="text-gray-500 text-sm">이번 달 연가/병가 신청 내역이 없습니다.</p>
+        <p className="text-gray-500 text-sm">이번 달 연가/병가 사용 내역이 없습니다.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {summary.map((m) => (
@@ -397,14 +418,14 @@ function MonthlyMemberSummary({
               <span className="font-medium text-gray-900">
                 {m.name} {m.rank}
               </span>
-              {m.annual > 0 && (
+              {m.annualDays > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                  연가 {m.annual}
+                  연가 {m.annualDays}일
                 </span>
               )}
-              {m.sick > 0 && (
+              {m.sickDays > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                  병가 {m.sick}
+                  병가 {m.sickDays}일
                 </span>
               )}
             </div>
