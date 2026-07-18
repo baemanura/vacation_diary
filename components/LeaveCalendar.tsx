@@ -614,27 +614,32 @@ function MonthlyMemberSummary({
     counts.set(leave.member_id, memberCounts);
   });
 
+  // 휴직자는 제외하고, 합계 사용일수가 많은 순으로 상위 5명만 보여준다.
   const summary = Array.from(counts.entries())
+    .filter(([, byType]) => !byType.has('휴직'))
     .map(([memberId, byType]) => ({
       memberId,
       name: profiles.get(memberId)?.name ?? '알 수 없음',
       rank: profiles.get(memberId)?.rank ?? '',
       byType: Array.from(byType.entries()),
+      totalDays: Array.from(byType.values()).reduce((sum, d) => sum + d, 0),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    .sort((a, b) => b.totalDays - a.totalDays || a.name.localeCompare(b.name, 'ko'))
+    .slice(0, 5);
 
   return (
     <div className="mt-6 pt-6 border-t border-gray-200">
-      <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수</h3>
+      <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수 (상위 5명)</h3>
       {summary.length === 0 ? (
         <p className="text-gray-500 text-sm">이번 달 사용 내역이 없습니다.</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {summary.map((m) => (
+        <div className="space-y-1.5">
+          {summary.map((m, index) => (
             <div
               key={m.memberId}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200 text-sm"
+              className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-sm"
             >
+              <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{index + 1}위</span>
               <span className="font-medium text-gray-900">
                 {m.name} {m.rank}
               </span>
@@ -648,6 +653,7 @@ function MonthlyMemberSummary({
                   {type} {days}일
                 </span>
               ))}
+              <span className="ml-auto text-xs text-gray-500">합계 {m.totalDays}일</span>
             </div>
           ))}
         </div>
