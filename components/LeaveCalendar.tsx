@@ -7,6 +7,7 @@ import {
   getQuotaForDate,
   formatDateTime,
   daysBetweenInclusive,
+  addDays,
   type QuotaSetting,
 } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
@@ -17,6 +18,7 @@ interface LeaveRequest {
   end_date: string;
   type: string;
   sub_reason: string | null;
+  note: string | null;
   status: string;
   created_at: string;
   cancelled_at: string | null;
@@ -112,14 +114,20 @@ export default function LeaveCalendar({
   };
 
   // 본인이 취소하면 사유 없이, 서무가 본인 것이 아닌 신청을 취소하면 사유를 받아 기록한다.
-  const handleCancel = async (leave: LeaveRequest) => {
+  // 여러 날에 걸친 신청 중 하루만 취소하는 경우, 그 하루만 취소 처리하고
+  // 나머지 앞/뒤 구간은 별도의 유효한 신청으로 남긴다.
+  const handleCancel = async (leave: LeaveRequest, dateToCancel: string) => {
     const isSelf = leave.member_id === currentUserId;
+    const isPartial = leave.start_date !== leave.end_date;
+    const scopeNote = isPartial
+      ? ` (${leave.start_date} ~ ${leave.end_date} 중 ${dateToCancel}만 취소되고 나머지는 유지됩니다)`
+      : '';
     let reason: string | null = null;
 
     if (isSelf) {
-      if (!confirm('정말 취소하시겠습니까?')) return;
+      if (!confirm(`정말 취소하시겠습니까?${scopeNote}`)) return;
     } else {
-      const input = prompt('취소 사유를 입력해주세요.');
+      const input = prompt(`취소 사유를 입력해주세요.${scopeNote}`);
       if (input === null) return;
       if (!input.trim()) {
         alert('취소 사유를 입력해야 합니다.');
@@ -129,15 +137,44 @@ export default function LeaveCalendar({
     }
 
     try {
-      const { error } = await supabase
+      // 남는 앞/뒤 구간을 먼저 새 신청으로 등록한 뒤에만 원래 row를 취소 처리한다.
+      // (등록이 실패하면 아무것도 건드리지 않아, 실패해도 기존 신청은 그대로 안전하게 남는다.)
+      const segments: { start_date: string; end_date: string }[] = [];
+      if (dateToCancel > leave.start_date) {
+        segments.push({ start_date: leave.start_date, end_date: addDays(dateToCancel, -1) });
+      }
+      if (dateToCancel < leave.end_date) {
+        segments.push({ start_date: addDays(dateToCancel, 1), end_date: leave.end_date });
+      }
+
+      if (segments.length > 0) {
+        const { error: insertError } = await supabase.from('leave_requests').insert(
+          segments.map((segment) => ({
+            member_id: leave.member_id,
+            type: leave.type,
+            sub_reason: leave.sub_reason,
+            note: leave.note,
+            start_date: segment.start_date,
+            end_date: segment.end_date,
+            status: 'active',
+          }))
+        );
+        if (insertError) throw insertError;
+      }
+
+      // 원래 신청 row는 취소되는 그 하루만 나타내도록 축소하고 취소 처리한다.
+      const { error: updateError } = await supabase
         .from('leave_requests')
         .update({
+          start_date: dateToCancel,
+          end_date: dateToCancel,
           status: 'cancelled',
           cancelled_at: new Date().toISOString(),
           cancel_reason: reason,
         })
         .eq('id', leave.id);
-      if (error) throw error;
+      if (updateError) throw updateError;
+
       await loadData();
     } catch (error) {
       alert('취소 실패했습니다.');
@@ -378,7 +415,7 @@ export default function LeaveCalendar({
                         </span>
                         {canCancel && (
                           <button
-                            onClick={() => handleCancel(leave)}
+                            onClick={() => handleCancel(leave, selectedDate)}
                             className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
                             title="취소"
                           >
