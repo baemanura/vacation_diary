@@ -48,9 +48,16 @@ export function formatDate(dateString: string) {
   });
 }
 
+// Supabase의 timestamp(타임존 없는) 컬럼은 UTC 값인데도 'Z'/오프셋 없이 내려온다.
+// 타임존 표기가 없으면 JS가 이를 로컬 시각으로 오인해서 한국 시간 기준 9시간이 어긋난다.
+// 타임존 표기가 없을 때만 'Z'를 붙여 UTC로 명시적으로 해석한다.
+function parseTimestamp(dateString: string) {
+  const hasTimezone = /[zZ]|[+-]\d\d:?\d\d$/.test(dateString);
+  return new Date(hasTimezone ? dateString : `${dateString}Z`);
+}
+
 export function formatDateTime(dateString: string) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('ko-KR', {
+  return parseTimestamp(dateString).toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -59,5 +66,23 @@ export function formatDateTime(dateString: string) {
   });
 }
 
+export function formatDateFromTimestamp(dateString: string) {
+  return parseTimestamp(dateString).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
 export const LEAVE_TYPES = ['연가', '병가', '공가', '교육', '출장'];
 export const LEAVE_REASONS = ['해외여행', '국내여행', '결혼식', '신혼여행', '출산휴가', '기타'];
+
+// 출동율별 기본 인원. 예비인원은 기본 인원 + 2명으로 계산한다.
+export const DISPATCH_RATE_OPTIONS = ['70%', '80%'] as const;
+export const BASE_QUOTA_BY_DISPATCH_RATE: Record<string, number> = {
+  '70%': 5,
+  '80%': 3,
+};
+export function getReserveQuota(baseQuota: number) {
+  return baseQuota + 2;
+}

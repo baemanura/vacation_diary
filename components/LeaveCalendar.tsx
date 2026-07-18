@@ -170,19 +170,19 @@ export default function LeaveCalendar() {
             </div>
           </div>
           <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
-            <div className="text-xs text-gray-500 mb-1">최대 가능 인원</div>
+            <div className="text-xs text-gray-500 mb-1">가능인원</div>
             <div className="text-lg font-bold text-gray-900">
               {referenceQuota ? `${referenceQuota.max_quota}명` : '-'}
             </div>
           </div>
           <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
-            <div className="text-xs text-gray-500 mb-1">현재 신청 인원</div>
+            <div className="text-xs text-gray-500 mb-1">현재 신청인원</div>
             <div className="text-lg font-bold text-gray-900">
               {referenceQuota ? `${referenceCount}명` : '-'}
             </div>
           </div>
           <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
-            <div className="text-xs text-gray-500 mb-1">남은 가능 인원</div>
+            <div className="text-xs text-gray-500 mb-1">남은인원</div>
             <div
               className={`text-lg font-bold ${
                 referenceRemaining === null
@@ -269,11 +269,11 @@ export default function LeaveCalendar() {
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-yellow-100 border border-yellow-300"></div>
-            <span className="text-sm">주의 (기본치 ~ 최대치)</span>
+            <span className="text-sm">주의 (기본치 ~ 예비인원)</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-red-100 border border-red-300"></div>
-            <span className="text-sm">초과 (&gt; 최대치)</span>
+            <span className="text-sm">초과 (&gt; 예비인원)</span>
           </div>
         </div>
       </div>

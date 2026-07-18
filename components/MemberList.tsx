@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { formatDateFromTimestamp } from '@/lib/utils';
 import { Edit2, Trash2 } from 'lucide-react';
 
 interface Member {
@@ -134,7 +135,7 @@ export default function MemberList() {
                   )}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-600">
-                  {new Date(member.created_at).toLocaleDateString('ko-KR')}
+                  {formatDateFromTimestamp(member.created_at)}
                 </td>
                 <td className="px-6 py-4 text-sm space-x-3 flex">
                   <button

@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getQuotaForDate, addDays, type QuotaSetting } from '@/lib/utils';
+import {
+  getQuotaForDate,
+  addDays,
+  formatDateFromTimestamp,
+  DISPATCH_RATE_OPTIONS,
+  BASE_QUOTA_BY_DISPATCH_RATE,
+  getReserveQuota,
+  type QuotaSetting,
+} from '@/lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
 
 export default function QuotaSettingsManager({ currentUserId }: { currentUserId: string }) {
@@ -12,11 +20,12 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     dispatchRate: '80%',
-    baseQuota: 3,
-    maxQuota: 5,
     effectiveFrom: new Date().toISOString().split('T')[0],
     effectiveTo: '',
   });
+
+  const formBaseQuota = BASE_QUOTA_BY_DISPATCH_RATE[formData.dispatchRate] ?? 0;
+  const formReserveQuota = getReserveQuota(formBaseQuota);
 
   useEffect(() => {
     loadSettings();
@@ -53,8 +62,8 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
       const { error: insertError } = await supabase.from('quota_settings').insert({
         effective_from: formData.effectiveFrom,
         dispatch_rate: formData.dispatchRate,
-        base_quota: formData.baseQuota,
-        max_quota: formData.maxQuota,
+        base_quota: formBaseQuota,
+        max_quota: formReserveQuota,
         created_by: currentUserId,
       });
       if (insertError) throw insertError;
@@ -75,8 +84,6 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
 
       setFormData({
         dispatchRate: '80%',
-        baseQuota: 3,
-        maxQuota: 5,
         effectiveFrom: new Date().toISOString().split('T')[0],
         effectiveTo: '',
       });
@@ -127,13 +134,17 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   출동율
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.dispatchRate}
                   onChange={(e) => setFormData({ ...formData, dispatchRate: e.target.value })}
-                  placeholder="예: 80%"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
+                >
+                  {DISPATCH_RATE_OPTIONS.map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -168,33 +179,13 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  기본치 (인원)
-                </label>
-                <input
-                  type="number"
-                  value={formData.baseQuota}
-                  onChange={(e) =>
-                    setFormData({ ...formData, baseQuota: parseInt(e.target.value) })
-                  }
-                  min="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
+              <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="text-xs text-gray-500">기본 인원</div>
+                <div className="text-lg font-semibold text-gray-900">{formBaseQuota}명</div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  최대치 (인원)
-                </label>
-                <input
-                  type="number"
-                  value={formData.maxQuota}
-                  onChange={(e) =>
-                    setFormData({ ...formData, maxQuota: parseInt(e.target.value) })
-                  }
-                  min="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
+              <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="text-xs text-gray-500">예비인원 (기본 인원 + 2)</div>
+                <div className="text-lg font-semibold text-gray-900">{formReserveQuota}명</div>
               </div>
             </div>
 
@@ -248,7 +239,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                   기본치
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  최대치
+                  예비인원
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   작성일
@@ -270,7 +261,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.base_quota}명</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.max_quota}명</td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(setting.created_at).toLocaleDateString('ko-KR')}
+                    {formatDateFromTimestamp(setting.created_at)}
                   </td>
                   <td className="px-6 py-4 text-sm">
                     <button
