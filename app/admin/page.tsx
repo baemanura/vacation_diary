@@ -114,7 +114,7 @@ export default function AdminPage() {
 
       {/* 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'quota' && <QuotaSettingsManager />}
+        {activeTab === 'quota' && <QuotaSettingsManager currentUserId={user?.id} />}
         {activeTab === 'account' && <AccountManager />}
         {activeTab === 'members' && <MemberList />}
       </main>

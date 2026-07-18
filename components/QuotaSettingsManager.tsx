@@ -13,7 +13,7 @@ interface QuotaSetting {
   created_at: string;
 }
 
-export default function QuotaSettingsManager() {
+export default function QuotaSettingsManager({ currentUserId }: { currentUserId: string }) {
   const [settings, setSettings] = useState<QuotaSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -52,6 +52,7 @@ export default function QuotaSettingsManager() {
         dispatch_rate: formData.dispatchRate,
         base_quota: formData.baseQuota,
         max_quota: formData.maxQuota,
+        created_by: currentUserId,
       });
 
       setFormData({
