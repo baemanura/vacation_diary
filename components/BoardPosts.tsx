@@ -219,7 +219,7 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
                 onClick={() => toggleComments(post.id)}
                 className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
               >
-                댓글 {post.board_comments?.length || 0}개
+                댓글 {(post.board_comments || []).length}개
                 {expandedPosts.has(post.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
 
