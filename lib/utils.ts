@@ -32,6 +32,13 @@ export function getQuotaForDate(settings: QuotaSetting[], date: string): QuotaSe
   });
 }
 
+// "오늘"을 로컬 날짜 문자열로 반환한다. new Date().toISOString()로 만들면
+// 한국 시간대에서 자정~오전 9시 사이에 UTC 변환 때문에 하루 전으로 밀린다.
+export function getTodayString() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 export function addDays(dateString: string, days: number) {
   const [y, m, d] = dateString.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));

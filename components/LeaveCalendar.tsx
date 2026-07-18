@@ -8,6 +8,7 @@ import {
   formatDateTime,
   daysBetweenInclusive,
   addDays,
+  getTodayString,
   type QuotaSetting,
 } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
@@ -65,12 +66,13 @@ export default function LeaveCalendar({
       setQuotaSettings(quota || []);
 
       // 현재 월의 연가 데이터 조회
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-        .toISOString()
-        .split('T')[0];
-      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-        .toISOString()
-        .split('T')[0];
+      // (new Date(...).toISOString()로 만들면 한국 시간대에서 UTC 변환 때문에
+      // 하루 밀릴 수 있어, 로컬 연/월/일 값으로 직접 문자열을 만든다)
+      const dataYear = currentDate.getFullYear();
+      const dataMonth = currentDate.getMonth();
+      const firstDay = `${dataYear}-${String(dataMonth + 1).padStart(2, '0')}-01`;
+      const daysInDataMonth = new Date(dataYear, dataMonth + 1, 0).getDate();
+      const lastDay = `${dataYear}-${String(dataMonth + 1).padStart(2, '0')}-${String(daysInDataMonth).padStart(2, '0')}`;
 
       const { data: leaveData, error: leaveError } = await supabase
         .from('leave_requests')
@@ -271,7 +273,7 @@ export default function LeaveCalendar({
   };
 
   // 상단 요약 카드에 쓸 기준일: 날짜를 선택했으면 그 날짜, 아니면 오늘(이번 달을 보고 있을 때만) 또는 이번 달 1일
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayString();
   const isTodayInThisMonth = todayStr.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`;
   const referenceDate =
     selectedDate ?? (isTodayInThisMonth ? todayStr : `${year}-${String(month + 1).padStart(2, '0')}-01`);

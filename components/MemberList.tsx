@@ -45,12 +45,13 @@ export default function MemberList() {
 
   const confirmRoleChange = async (id: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({ role: newRole })
         .eq('id', id);
+      if (error) throw error;
 
-      loadMembers();
+      await loadMembers();
       setEditingId(null);
       alert('역할이 변경되었습니다.');
     } catch (error) {
@@ -64,8 +65,9 @@ export default function MemberList() {
 
     try {
       // profiles만 삭제 (Auth 계정은 Supabase 대시보드에서 별도 삭제 필요)
-      await supabase.from('profiles').delete().eq('id', id);
-      loadMembers();
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      await loadMembers();
     } catch (error) {
       alert('삭제 실패');
       console.error(error);

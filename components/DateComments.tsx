@@ -36,6 +36,7 @@ export default function DateComments({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    setNewComment('');
     loadComments();
   }, [date]);
 

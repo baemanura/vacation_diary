@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import {
   getQuotaForDate,
   addDays,
+  getTodayString,
   formatDateFromTimestamp,
   DISPATCH_RATE_OPTIONS,
   BASE_QUOTA_BY_DISPATCH_RATE,
@@ -21,7 +22,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     dispatchRate: '80%',
-    effectiveFrom: new Date().toISOString().split('T')[0],
+    effectiveFrom: getTodayString(),
     effectiveTo: '',
   });
 
@@ -85,7 +86,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
 
       setFormData({
         dispatchRate: '80%',
-        effectiveFrom: new Date().toISOString().split('T')[0],
+        effectiveFrom: getTodayString(),
         effectiveTo: '',
       });
       setShowForm(false);
