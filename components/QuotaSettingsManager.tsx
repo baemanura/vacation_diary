@@ -2,26 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getQuotaForDate, addDays, type QuotaSetting } from '@/lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
-
-interface QuotaSetting {
-  id: string;
-  effective_from: string;
-  dispatch_rate: string;
-  base_quota: number;
-  max_quota: number;
-  created_at: string;
-}
 
 export default function QuotaSettingsManager({ currentUserId }: { currentUserId: string }) {
   const [settings, setSettings] = useState<QuotaSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     dispatchRate: '80%',
     baseQuota: 3,
     maxQuota: 5,
     effectiveFrom: new Date().toISOString().split('T')[0],
+    effectiveTo: '',
   });
 
   useEffect(() => {
@@ -43,30 +37,57 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
     }
   };
 
+  // 이 테이블엔 종료일 컬럼이 없어서, 기간을 지정하면 시작일에 새 설정을 추가하고
+  // 종료일 다음날에 "그 이전에 적용되던 설정"을 다시 추가해 기간이 끝나면 원래대로 돌아가게 한다.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (formData.effectiveTo && formData.effectiveTo < formData.effectiveFrom) {
+      alert('종료일은 시작일보다 빠를 수 없습니다.');
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
-      await supabase.from('quota_settings').insert({
+      const { error: insertError } = await supabase.from('quota_settings').insert({
         effective_from: formData.effectiveFrom,
         dispatch_rate: formData.dispatchRate,
         base_quota: formData.baseQuota,
         max_quota: formData.maxQuota,
         created_by: currentUserId,
       });
+      if (insertError) throw insertError;
+
+      if (formData.effectiveTo) {
+        const previous = getQuotaForDate(settings, addDays(formData.effectiveFrom, -1));
+        if (previous) {
+          const { error: restoreError } = await supabase.from('quota_settings').insert({
+            effective_from: addDays(formData.effectiveTo, 1),
+            dispatch_rate: previous.dispatch_rate,
+            base_quota: previous.base_quota,
+            max_quota: previous.max_quota,
+            created_by: currentUserId,
+          });
+          if (restoreError) throw restoreError;
+        }
+      }
 
       setFormData({
         dispatchRate: '80%',
         baseQuota: 3,
         maxQuota: 5,
         effectiveFrom: new Date().toISOString().split('T')[0],
+        effectiveTo: '',
       });
       setShowForm(false);
-      loadSettings();
+      await loadSettings();
       alert('정원 설정이 저장되었습니다.');
     } catch (error) {
       alert('저장 실패했습니다.');
       console.error(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -74,16 +95,25 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
-      await supabase.from('quota_settings').delete().eq('id', id);
-      loadSettings();
+      const { error } = await supabase.from('quota_settings').delete().eq('id', id);
+      if (error) throw error;
+      await loadSettings();
     } catch (error) {
       alert('삭제 실패했습니다.');
+      console.error(error);
     }
   };
 
   if (loading) {
     return <div className="text-gray-600">로딩 중...</div>;
   }
+
+  // 표시용: 각 설정이 다음 설정 시작일 전날까지 적용되는 것으로 보고 종료일을 계산한다.
+  const nextStartDates = Array.from(new Set(settings.map((s) => s.effective_from))).sort();
+  const getDisplayEndDate = (effectiveFrom: string) => {
+    const next = nextStartDates.find((d) => d > effectiveFrom);
+    return next ? addDays(next, -1) : null;
+  };
 
   return (
     <div className="space-y-6">
@@ -120,6 +150,23 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                적용 종료일 (선택)
+              </label>
+              <input
+                type="date"
+                value={formData.effectiveTo}
+                onChange={(e) => setFormData({ ...formData, effectiveTo: e.target.value })}
+                min={formData.effectiveFrom}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                비워두면 다음 설정을 추가하기 전까지 계속 적용됩니다. 종료일을 지정하면 그
+                다음날부터는 이전에 적용되던 출동율로 자동으로 돌아갑니다.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -154,13 +201,15 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition"
+                disabled={submitting}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition"
               >
-                저장
+                {submitting ? '저장 중...' : '저장'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
+                disabled={submitting}
                 className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition"
               >
                 취소
@@ -190,7 +239,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  적용 시작일
+                  적용 기간
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   출동율
@@ -210,9 +259,13 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {settings.map((setting) => (
+              {settings.map((setting) => {
+                const endDate = getDisplayEndDate(setting.effective_from);
+                return (
                 <tr key={setting.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900">{setting.effective_from}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    {setting.effective_from} ~ {endDate ?? '계속 적용'}
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.dispatch_rate}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.base_quota}명</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.max_quota}명</td>
@@ -228,7 +281,8 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

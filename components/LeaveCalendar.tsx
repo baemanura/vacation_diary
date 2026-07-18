@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getQuotaStatus, formatDateTime } from '@/lib/utils';
+import { getQuotaStatus, getQuotaForDate, formatDateTime, type QuotaSetting } from '@/lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LeaveRequest {
@@ -17,11 +17,6 @@ interface LeaveRequest {
   member_id?: string;
 }
 
-interface QuotaSettings {
-  base_quota: number;
-  max_quota: number;
-}
-
 interface Profile {
   id: string;
   name: string;
@@ -32,7 +27,7 @@ export default function LeaveCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 18)); // 7월 18일
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
-  const [quotaSettings, setQuotaSettings] = useState<QuotaSettings | null>(null);
+  const [quotaSettings, setQuotaSettings] = useState<QuotaSetting[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,16 +36,14 @@ export default function LeaveCalendar() {
 
   const loadData = async () => {
     try {
-      // 정원 설정 조회
-      const { data: quota } = await supabase
+      // 정원 설정 전체 조회 (기간별로 다른 출동율이 적용될 수 있어 날짜별로 직접 계산한다)
+      const { data: quota, error: quotaError } = await supabase
         .from('quota_settings')
-        .select('base_quota, max_quota')
-        .lte('effective_from', new Date().toISOString().split('T')[0])
-        .order('effective_from', { ascending: false })
-        .limit(1)
-        .single();
+        .select('*')
+        .order('effective_from', { ascending: true });
 
-      setQuotaSettings(quota);
+      if (quotaError) console.error('정원 설정 조회 실패:', quotaError);
+      setQuotaSettings(quota || []);
 
       // 현재 월의 연가 데이터 조회
       const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
@@ -133,6 +126,15 @@ export default function LeaveCalendar() {
     setSelectedDate(null);
   };
 
+  // 상단 요약 카드에 쓸 기준일: 날짜를 선택했으면 그 날짜, 아니면 오늘(이번 달을 보고 있을 때만) 또는 이번 달 1일
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isTodayInThisMonth = todayStr.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`;
+  const referenceDate =
+    selectedDate ?? (isTodayInThisMonth ? todayStr : `${year}-${String(month + 1).padStart(2, '0')}-01`);
+  const referenceQuota = getQuotaForDate(quotaSettings, referenceDate);
+  const referenceCount = getRequestsForDate(referenceDate).length;
+  const referenceRemaining = referenceQuota ? Math.max(referenceQuota.max_quota - referenceCount, 0) : null;
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       {/* 헤더 */}
@@ -151,6 +153,48 @@ export default function LeaveCalendar() {
           >
             <ChevronRight size={20} />
           </button>
+        </div>
+      </div>
+
+      {/* 상단 요약: 기준일의 출동율/정원 현황 */}
+      <div className="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-200">
+        <div className="text-sm text-gray-600 mb-3">
+          {referenceDate} 기준{!selectedDate && isTodayInThisMonth && ' (오늘)'}
+          {!referenceQuota && ' · 적용된 출동율 설정이 없습니다.'}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+            <div className="text-xs text-gray-500 mb-1">출동율</div>
+            <div className="text-lg font-bold text-gray-900">
+              {referenceQuota ? referenceQuota.dispatch_rate : '-'}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+            <div className="text-xs text-gray-500 mb-1">최대 가능 인원</div>
+            <div className="text-lg font-bold text-gray-900">
+              {referenceQuota ? `${referenceQuota.max_quota}명` : '-'}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+            <div className="text-xs text-gray-500 mb-1">현재 신청 인원</div>
+            <div className="text-lg font-bold text-gray-900">
+              {referenceQuota ? `${referenceCount}명` : '-'}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+            <div className="text-xs text-gray-500 mb-1">남은 가능 인원</div>
+            <div
+              className={`text-lg font-bold ${
+                referenceRemaining === null
+                  ? 'text-gray-900'
+                  : referenceRemaining > 0
+                    ? 'text-green-600'
+                    : 'text-red-600'
+              }`}
+            >
+              {referenceRemaining === null ? '-' : `${referenceRemaining}명`}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -174,9 +218,10 @@ export default function LeaveCalendar() {
 
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const requests = getRequestsForDate(dateStr);
+          const dayQuota = getQuotaForDate(quotaSettings, dateStr);
           const status =
-            quotaSettings && requests.length > 0
-              ? getQuotaStatus(requests.length, quotaSettings.base_quota, quotaSettings.max_quota)
+            dayQuota && requests.length > 0
+              ? getQuotaStatus(requests.length, dayQuota.base_quota, dayQuota.max_quota)
               : null;
 
           return (
