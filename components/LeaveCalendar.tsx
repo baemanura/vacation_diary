@@ -327,18 +327,28 @@ export default function LeaveCalendar({
                 </div>
               )}
               <div className="hidden sm:block w-full mt-0.5 space-y-0.5">
-                {requests.slice(0, 3).map((leave, idx) => {
-                  const { name, type } = getRequesterInfo(leave);
+                {(() => {
+                  // 그 날짜의 가능인원만큼 이름을 먼저 보여주고, 넘치는 인원만 +N으로 묶는다.
+                  const visibleCount = dayQuota?.base_quota ?? 3;
                   return (
-                    <div key={idx} className="text-xs truncate leading-tight">
-                      <span className="font-semibold">{name}</span>
-                      <span className="text-gray-600"> ({type})</span>
-                    </div>
+                    <>
+                      {requests.slice(0, visibleCount).map((leave, idx) => {
+                        const { name, type } = getRequesterInfo(leave);
+                        return (
+                          <div key={idx} className="text-xs truncate leading-tight">
+                            <span className="font-semibold">{name}</span>
+                            <span className="text-gray-600"> ({type})</span>
+                          </div>
+                        );
+                      })}
+                      {requests.length > visibleCount && (
+                        <div className="text-xs text-gray-500">
+                          +{requests.length - visibleCount}명
+                        </div>
+                      )}
+                    </>
                   );
-                })}
-                {requests.length > 3 && (
-                  <div className="text-xs text-gray-500">+{requests.length - 3}명</div>
-                )}
+                })()}
               </div>
             </button>
           );
