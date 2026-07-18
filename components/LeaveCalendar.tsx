@@ -133,7 +133,7 @@ export default function LeaveCalendar() {
     selectedDate ?? (isTodayInThisMonth ? todayStr : `${year}-${String(month + 1).padStart(2, '0')}-01`);
   const referenceQuota = getQuotaForDate(quotaSettings, referenceDate);
   const referenceCount = getRequestsForDate(referenceDate).length;
-  const referenceRemaining = referenceQuota ? Math.max(referenceQuota.max_quota - referenceCount, 0) : null;
+  const referenceRemaining = referenceQuota ? Math.max(referenceQuota.base_quota - referenceCount, 0) : null;
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
@@ -172,7 +172,7 @@ export default function LeaveCalendar() {
           <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">가능인원</div>
             <div className="text-lg font-bold text-gray-900">
-              {referenceQuota ? `${referenceQuota.max_quota}명` : '-'}
+              {referenceQuota ? `${referenceQuota.base_quota}명` : '-'}
             </div>
           </div>
           <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
@@ -262,18 +262,24 @@ export default function LeaveCalendar() {
       {/* 범례 */}
       <div className="mt-6 pt-4 border-t border-gray-200">
         <div className="text-sm text-gray-600 mb-2">범례:</div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-green-100 border border-green-300"></div>
-            <span className="text-sm">여유 (≤ 기본치)</span>
+            <div className="w-6 h-6 shrink-0 rounded bg-green-100 border border-green-300"></div>
+            <span className="text-sm">
+              여유 <span className="text-gray-500">— 가능인원 이내</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-yellow-100 border border-yellow-300"></div>
-            <span className="text-sm">주의 (기본치 ~ 예비인원)</span>
+            <div className="w-6 h-6 shrink-0 rounded bg-yellow-100 border border-yellow-300"></div>
+            <span className="text-sm">
+              주의 <span className="text-gray-500">— 예비인원까지 사용 중</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-red-100 border border-red-300"></div>
-            <span className="text-sm">초과 (&gt; 예비인원)</span>
+            <div className="w-6 h-6 shrink-0 rounded bg-red-100 border border-red-300"></div>
+            <span className="text-sm">
+              초과 <span className="text-gray-500">— 예비인원까지 초과</span>
+            </span>
           </div>
         </div>
       </div>

@@ -77,12 +77,14 @@ export function formatDateFromTimestamp(dateString: string) {
 export const LEAVE_TYPES = ['연가', '병가', '공가', '교육', '출장'];
 export const LEAVE_REASONS = ['해외여행', '국내여행', '결혼식', '신혼여행', '출산휴가', '기타'];
 
-// 출동율별 기본 인원. 예비인원은 기본 인원 + 2명으로 계산한다.
+// 출동율별 가능인원(통상적으로 연가를 보낼 수 있는 인원).
+// 예비인원은 만일을 대비해 별도로 잡아두는 인원으로, 가능인원과 별개로 항상 2명이다.
 export const DISPATCH_RATE_OPTIONS = ['70%', '80%'] as const;
 export const BASE_QUOTA_BY_DISPATCH_RATE: Record<string, number> = {
   '70%': 5,
   '80%': 3,
 };
-export function getReserveQuota(baseQuota: number) {
-  return baseQuota + 2;
+export const RESERVE_QUOTA = 2;
+export function getMaxQuota(baseQuota: number) {
+  return baseQuota + RESERVE_QUOTA;
 }

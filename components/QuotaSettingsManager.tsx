@@ -8,7 +8,8 @@ import {
   formatDateFromTimestamp,
   DISPATCH_RATE_OPTIONS,
   BASE_QUOTA_BY_DISPATCH_RATE,
-  getReserveQuota,
+  RESERVE_QUOTA,
+  getMaxQuota,
   type QuotaSetting,
 } from '@/lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
@@ -25,7 +26,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
   });
 
   const formBaseQuota = BASE_QUOTA_BY_DISPATCH_RATE[formData.dispatchRate] ?? 0;
-  const formReserveQuota = getReserveQuota(formBaseQuota);
+  const formMaxQuota = getMaxQuota(formBaseQuota);
 
   useEffect(() => {
     loadSettings();
@@ -63,7 +64,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
         effective_from: formData.effectiveFrom,
         dispatch_rate: formData.dispatchRate,
         base_quota: formBaseQuota,
-        max_quota: formReserveQuota,
+        max_quota: formMaxQuota,
         created_by: currentUserId,
       });
       if (insertError) throw insertError;
@@ -178,16 +179,24 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
-                <div className="text-xs text-gray-500">기본 인원</div>
+                <div className="text-xs text-gray-500">가능인원</div>
                 <div className="text-lg font-semibold text-gray-900">{formBaseQuota}명</div>
               </div>
               <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
-                <div className="text-xs text-gray-500">예비인원 (기본 인원 + 2)</div>
-                <div className="text-lg font-semibold text-gray-900">{formReserveQuota}명</div>
+                <div className="text-xs text-gray-500">예비인원</div>
+                <div className="text-lg font-semibold text-gray-900">+{RESERVE_QUOTA}명</div>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                <div className="text-xs text-gray-500">총 한도</div>
+                <div className="text-lg font-semibold text-gray-900">{formMaxQuota}명</div>
               </div>
             </div>
+            <p className="text-xs text-gray-500">
+              가능인원은 통상적으로 연가를 보낼 수 있는 인원이고, 예비인원은 혹시 모를 경우를
+              대비해 별도로 남겨두는 인원입니다.
+            </p>
 
             <div className="flex gap-3">
               <button
@@ -236,10 +245,13 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                   출동율
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  기본치
+                  가능인원
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   예비인원
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  총 한도
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   작성일
@@ -259,6 +271,9 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.dispatch_rate}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.base_quota}명</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    +{setting.max_quota - setting.base_quota}명
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-900">{setting.max_quota}명</td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {formatDateFromTimestamp(setting.created_at)}
