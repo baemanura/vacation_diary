@@ -11,6 +11,7 @@ import {
   type QuotaSetting,
 } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import DateComments from './DateComments';
 
 interface LeaveRequest {
   id: string;
@@ -563,6 +564,13 @@ export default function LeaveCalendar({
               })
             )}
           </div>
+
+          <DateComments
+            date={selectedDate}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            profiles={profiles}
+          />
         </div>
       )}
 
