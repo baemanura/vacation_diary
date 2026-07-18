@@ -577,6 +577,15 @@ export default function LeaveCalendar({
   );
 }
 
+const TYPE_BADGE_COLOR: Record<string, string> = {
+  연가: 'bg-green-100 text-green-700',
+  병가: 'bg-blue-100 text-blue-700',
+  공가: 'bg-purple-100 text-purple-700',
+  교육: 'bg-amber-100 text-amber-700',
+  출장: 'bg-orange-100 text-orange-700',
+  휴직: 'bg-pink-100 text-pink-700',
+};
+
 function MonthlyMemberSummary({
   leaves,
   profiles,
@@ -588,10 +597,10 @@ function MonthlyMemberSummary({
   firstDay: string;
   lastDay: string;
 }) {
-  const counts = new Map<string, { annualDays: number; sickDays: number }>();
+  // member별로 유형별 사용일수를 집계한다.
+  const counts = new Map<string, Map<string, number>>();
 
   leaves.forEach((leave) => {
-    if (leave.type !== '연가' && leave.type !== '병가') return;
     if (!leave.member_id) return;
 
     // 이번 달 범위로 잘라낸 실제 사용일수만 집계한다.
@@ -600,18 +609,17 @@ function MonthlyMemberSummary({
     if (clippedStart > clippedEnd) return;
     const days = daysBetweenInclusive(clippedStart, clippedEnd);
 
-    const entry = counts.get(leave.member_id) || { annualDays: 0, sickDays: 0 };
-    if (leave.type === '연가') entry.annualDays += days;
-    else entry.sickDays += days;
-    counts.set(leave.member_id, entry);
+    const memberCounts = counts.get(leave.member_id) || new Map<string, number>();
+    memberCounts.set(leave.type, (memberCounts.get(leave.type) ?? 0) + days);
+    counts.set(leave.member_id, memberCounts);
   });
 
   const summary = Array.from(counts.entries())
-    .map(([memberId, count]) => ({
+    .map(([memberId, byType]) => ({
       memberId,
       name: profiles.get(memberId)?.name ?? '알 수 없음',
       rank: profiles.get(memberId)?.rank ?? '',
-      ...count,
+      byType: Array.from(byType.entries()),
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
@@ -619,7 +627,7 @@ function MonthlyMemberSummary({
     <div className="mt-6 pt-6 border-t border-gray-200">
       <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수</h3>
       {summary.length === 0 ? (
-        <p className="text-gray-500 text-sm">이번 달 연가/병가 사용 내역이 없습니다.</p>
+        <p className="text-gray-500 text-sm">이번 달 사용 내역이 없습니다.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {summary.map((m) => (
@@ -630,16 +638,16 @@ function MonthlyMemberSummary({
               <span className="font-medium text-gray-900">
                 {m.name} {m.rank}
               </span>
-              {m.annualDays > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                  연가 {m.annualDays}일
+              {m.byType.map(([type, days]) => (
+                <span
+                  key={type}
+                  className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    TYPE_BADGE_COLOR[type] ?? 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  {type} {days}일
                 </span>
-              )}
-              {m.sickDays > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                  병가 {m.sickDays}일
-                </span>
-              )}
+              ))}
             </div>
           ))}
         </div>
