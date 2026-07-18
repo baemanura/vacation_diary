@@ -35,10 +35,19 @@ export default function AccountManager() {
     const email = generateEmail();
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        setMessage('❌ 로그인이 필요합니다.');
+        return;
+      }
+
       const response = await fetch('/api/admin/create-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           name: formData.name,

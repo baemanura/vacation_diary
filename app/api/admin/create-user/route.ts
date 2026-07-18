@@ -3,16 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { email, password, name, rank, role = 'member' } = body;
-
-    if (!email || !password || !name || !rank) {
-      return NextResponse.json(
-        { error: '필수 정보가 누락되었습니다.' },
-        { status: 400 }
-      );
-    }
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -30,6 +20,39 @@ export async function POST(request: NextRequest) {
         persistSession: false,
       },
     });
+
+    // 요청자가 로그인된 서무인지 확인 (그렇지 않으면 계정을 생성할 수 없다)
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!token) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
+    const { data: callerData, error: callerError } = await supabase.auth.getUser(token);
+    if (callerError || !callerData.user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
+    const { data: callerProfile, error: callerProfileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', callerData.user.id)
+      .single();
+
+    if (callerProfileError || callerProfile?.role !== 'admin') {
+      return NextResponse.json({ error: '서무만 계정을 생성할 수 있습니다.' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { email, password, name, rank, role = 'member' } = body;
+
+    if (!email || !password || !name || !rank) {
+      return NextResponse.json(
+        { error: '필수 정보가 누락되었습니다.' },
+        { status: 400 }
+      );
+    }
 
     // 1. Auth에 사용자 생성
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
