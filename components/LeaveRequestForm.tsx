@@ -37,7 +37,28 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
     setLoading(true);
 
     try {
-      await supabase.from('leave_requests').insert({
+      // 같은 날짜에 이미 신청한(취소되지 않은) 다른 유형이 있으면 하루에 한 유형만
+      // 신청할 수 있도록 먼저 겹치는 신청이 있는지 확인한다.
+      const { data: overlapping, error: overlapError } = await supabase
+        .from('leave_requests')
+        .select('type, start_date, end_date')
+        .eq('member_id', currentUserId)
+        .eq('status', 'active')
+        .lte('start_date', formData.endDate)
+        .gte('end_date', formData.startDate);
+
+      if (overlapError) throw overlapError;
+
+      if (overlapping && overlapping.length > 0) {
+        const conflict = overlapping[0];
+        setError(
+          `이미 신청한 ${conflict.type}(${conflict.start_date} ~ ${conflict.end_date})와 날짜가 겹칩니다. 하루에 한 유형만 신청할 수 있습니다.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      const { error: insertError } = await supabase.from('leave_requests').insert({
         member_id: currentUserId,
         type: formData.type,
         sub_reason: formData.type === '연가' ? formData.subReason : null,
@@ -46,6 +67,14 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
         note: formData.note || null,
         status: 'active',
       });
+
+      if (insertError) {
+        if (insertError.code === '23P01') {
+          setError('이미 신청한 다른 유형과 날짜가 겹쳐 신청할 수 없습니다.');
+          return;
+        }
+        throw insertError;
+      }
 
       setFormData({
         type: '연가',

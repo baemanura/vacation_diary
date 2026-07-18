@@ -154,16 +154,29 @@ export default function LeaveCalendar({
       reason = input.trim();
     }
 
+    // 겹치는 활성 신청을 막는 DB 제약조건 때문에, 남는 구간을 먼저 등록하면 아직
+    // 원래 범위 그대로인 row와 겹쳐서 실패한다. 그래서 원래 row를 취소되는 하루로
+    // 먼저 축소한 다음 남는 구간을 등록하고, 등록이 실패하면 원래 상태로 되돌린다.
+    const segments: { start_date: string; end_date: string }[] = [];
+    if (dateToCancel > leave.start_date) {
+      segments.push({ start_date: leave.start_date, end_date: addDays(dateToCancel, -1) });
+    }
+    if (dateToCancel < leave.end_date) {
+      segments.push({ start_date: addDays(dateToCancel, 1), end_date: leave.end_date });
+    }
+
     try {
-      // 남는 앞/뒤 구간을 먼저 새 신청으로 등록한 뒤에만 원래 row를 취소 처리한다.
-      // (등록이 실패하면 아무것도 건드리지 않아, 실패해도 기존 신청은 그대로 안전하게 남는다.)
-      const segments: { start_date: string; end_date: string }[] = [];
-      if (dateToCancel > leave.start_date) {
-        segments.push({ start_date: leave.start_date, end_date: addDays(dateToCancel, -1) });
-      }
-      if (dateToCancel < leave.end_date) {
-        segments.push({ start_date: addDays(dateToCancel, 1), end_date: leave.end_date });
-      }
+      const { error: updateError } = await supabase
+        .from('leave_requests')
+        .update({
+          start_date: dateToCancel,
+          end_date: dateToCancel,
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancel_reason: reason,
+        })
+        .eq('id', leave.id);
+      if (updateError) throw updateError;
 
       if (segments.length > 0) {
         const { error: insertError } = await supabase.from('leave_requests').insert(
@@ -177,21 +190,21 @@ export default function LeaveCalendar({
             status: 'active',
           }))
         );
-        if (insertError) throw insertError;
+        if (insertError) {
+          // 남는 구간 등록에 실패했으면 원래 신청을 취소 전 상태로 되돌린다.
+          await supabase
+            .from('leave_requests')
+            .update({
+              start_date: leave.start_date,
+              end_date: leave.end_date,
+              status: 'active',
+              cancelled_at: null,
+              cancel_reason: null,
+            })
+            .eq('id', leave.id);
+          throw insertError;
+        }
       }
-
-      // 원래 신청 row는 취소되는 그 하루만 나타내도록 축소하고 취소 처리한다.
-      const { error: updateError } = await supabase
-        .from('leave_requests')
-        .update({
-          start_date: dateToCancel,
-          end_date: dateToCancel,
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancel_reason: reason,
-        })
-        .eq('id', leave.id);
-      if (updateError) throw updateError;
 
       await loadData();
     } catch (error) {
