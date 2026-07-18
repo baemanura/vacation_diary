@@ -20,7 +20,7 @@ interface Post {
   content: string;
   created_at: string;
   profiles: { name: string; rank: string };
-  comments?: Comment[];
+  board_comments?: Comment[];
 }
 
 export default function BoardPosts({ currentUserId }: { currentUserId: string }) {
