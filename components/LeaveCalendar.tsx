@@ -358,7 +358,7 @@ export default function LeaveCalendar({
         {calendarDays.map((day, index) => {
           if (day === null) {
             return (
-              <div key={`empty-${index}`} className="aspect-square bg-gray-50 rounded-lg"></div>
+              <div key={`empty-${index}`} className="min-h-16 sm:aspect-square bg-gray-50 rounded-lg"></div>
             );
           }
 
@@ -374,7 +374,7 @@ export default function LeaveCalendar({
             <button
               key={day}
               onClick={() => setSelectedDate(dateStr)}
-              className={`aspect-square p-1.5 rounded-lg border-2 transition flex flex-col items-start justify-start text-xs font-medium cursor-pointer overflow-hidden ${
+              className={`min-h-16 sm:aspect-square sm:overflow-hidden p-1.5 rounded-lg border-2 transition flex flex-col items-start justify-start text-xs font-medium cursor-pointer ${
                 selectedDate === dateStr
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
