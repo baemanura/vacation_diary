@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getQuotaStatus } from '@/lib/utils';
+import { getQuotaStatus, formatDateTime } from '@/lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LeaveRequest {
@@ -12,7 +12,8 @@ interface LeaveRequest {
   type: string;
   sub_reason: string | null;
   status: string;
-  profiles?: { name: string; rank: string };
+  created_at: string;
+  cancelled_at: string | null;
   member_id?: string;
 }
 
@@ -62,9 +63,9 @@ export default function LeaveCalendar() {
       const { data: leaveData, error: leaveError } = await supabase
         .from('leave_requests')
         .select('*')
-        .eq('status', 'active')
         .lte('end_date', lastDay)
-        .gte('start_date', firstDay);
+        .gte('start_date', firstDay)
+        .order('created_at', { ascending: true });
 
       if (leaveError) console.error('연가 조회 실패:', leaveError);
 
@@ -85,9 +86,13 @@ export default function LeaveCalendar() {
     }
   };
 
-  // 날짜 범위에 해당하는 신청 필터링
-  const getRequestsForDate = (date: string) => {
-    return leaves.filter((leave) => {
+  // 취소되지 않은(현재 유효한) 신청만
+  const activeLeaves = leaves.filter((leave) => leave.status === 'active');
+
+  // 날짜 범위에 해당하는 신청 필터링 (기본은 유효한 신청만, includeCancelled로 취소 내역도 포함)
+  const getRequestsForDate = (date: string, includeCancelled = false) => {
+    const source = includeCancelled ? leaves : activeLeaves;
+    return source.filter((leave) => {
       return date >= leave.start_date && date <= leave.end_date;
     });
   };
@@ -235,28 +240,124 @@ export default function LeaveCalendar() {
             {selectedDate} 신청 현황
           </h3>
           <div className="space-y-2">
-            {getRequestsForDate(selectedDate).length === 0 ? (
+            {getRequestsForDate(selectedDate, true).length === 0 ? (
               <p className="text-gray-500 text-sm">신청된 항목이 없습니다.</p>
             ) : (
-              getRequestsForDate(selectedDate).map((leave, idx) => {
+              getRequestsForDate(selectedDate, true).map((leave, idx) => {
                 const { name, rank } = getRequesterInfo(leave);
+                const cancelled = leave.status !== 'active';
                 return (
-                  <div key={idx} className="p-2 bg-gray-50 rounded text-sm">
-                    <span className="font-semibold text-gray-900">
-                      {name} {rank}
-                    </span>{' '}
-                    <span className="font-medium text-gray-900">{leave.type}</span>
-                    {leave.sub_reason && (
-                      <span className="text-gray-600"> ({leave.sub_reason})</span>
-                    )}
-                    <div className="text-xs text-gray-500">
+                  <div
+                    key={idx}
+                    className={`p-2 rounded text-sm border-l-4 ${
+                      cancelled
+                        ? 'bg-gray-50 border-gray-300 opacity-70'
+                        : 'bg-gray-50 border-green-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-semibold text-gray-900">
+                          {name} {rank}
+                        </span>{' '}
+                        <span className="font-medium text-gray-900">{leave.type}</span>
+                        {leave.sub_reason && (
+                          <span className="text-gray-600"> ({leave.sub_reason})</span>
+                        )}
+                      </div>
+                      <span
+                        className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+                          cancelled
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {cancelled ? '취소됨' : '신청중'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
                       {leave.start_date} ~ {leave.end_date}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      등록: {formatDateTime(leave.created_at)}
+                      {cancelled && leave.cancelled_at && (
+                        <span className="text-red-500">
+                          {' '}
+                          · 취소: {formatDateTime(leave.cancelled_at)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
               })
             )}
           </div>
+        </div>
+      )}
+
+      {/* 대원별 이달 신청 횟수 */}
+      <MonthlyMemberSummary
+        leaves={activeLeaves}
+        profiles={profiles}
+      />
+    </div>
+  );
+}
+
+function MonthlyMemberSummary({
+  leaves,
+  profiles,
+}: {
+  leaves: LeaveRequest[];
+  profiles: Map<string, Profile>;
+}) {
+  const counts = new Map<string, { annual: number; sick: number }>();
+
+  leaves.forEach((leave) => {
+    if (leave.type !== '연가' && leave.type !== '병가') return;
+    if (!leave.member_id) return;
+    const entry = counts.get(leave.member_id) || { annual: 0, sick: 0 };
+    if (leave.type === '연가') entry.annual += 1;
+    else entry.sick += 1;
+    counts.set(leave.member_id, entry);
+  });
+
+  const summary = Array.from(counts.entries())
+    .map(([memberId, count]) => ({
+      memberId,
+      name: profiles.get(memberId)?.name ?? '알 수 없음',
+      rank: profiles.get(memberId)?.rank ?? '',
+      ...count,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+  return (
+    <div className="mt-6 pt-6 border-t border-gray-200">
+      <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 신청 횟수</h3>
+      {summary.length === 0 ? (
+        <p className="text-gray-500 text-sm">이번 달 연가/병가 신청 내역이 없습니다.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {summary.map((m) => (
+            <div
+              key={m.memberId}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200 text-sm"
+            >
+              <span className="font-medium text-gray-900">
+                {m.name} {m.rank}
+              </span>
+              {m.annual > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                  연가 {m.annual}
+                </span>
+              )}
+              {m.sick > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                  병가 {m.sick}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
