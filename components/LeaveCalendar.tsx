@@ -32,6 +32,8 @@ interface Profile {
   rank: string;
 }
 
+const priorityKey = (date: string, memberId: string) => `${date}|${memberId}`;
+
 export default function LeaveCalendar({
   currentUserId,
   isAdmin = false,
@@ -43,6 +45,7 @@ export default function LeaveCalendar({
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
   const [quotaSettings, setQuotaSettings] = useState<QuotaSetting[]>([]);
+  const [priorities, setPriorities] = useState<Map<string, number>>(new Map());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +79,21 @@ export default function LeaveCalendar({
         .order('created_at', { ascending: true });
 
       if (leaveError) console.error('연가 조회 실패:', leaveError);
+
+      // 이번 달 순번 설정 조회
+      const { data: priorityData, error: priorityError } = await supabase
+        .from('leave_priorities')
+        .select('date, member_id, priority')
+        .gte('date', firstDay)
+        .lte('date', lastDay);
+
+      if (priorityError) console.error('순번 조회 실패:', priorityError);
+
+      const priorityMap = new Map<string, number>();
+      priorityData?.forEach((p) => {
+        priorityMap.set(priorityKey(p.date, p.member_id), p.priority);
+      });
+      setPriorities(priorityMap);
 
       // 모든 프로필 조회
       const { data: profileData } = await supabase
@@ -178,6 +196,32 @@ export default function LeaveCalendar({
       await loadData();
     } catch (error) {
       alert('취소 실패했습니다.');
+      console.error(error);
+    }
+  };
+
+  // 서무가 특정 날짜에 신청한 사람들의 순번(1~5)을 지정/해제한다.
+  const handleSetPriority = async (date: string, memberId: string, priority: number | null) => {
+    try {
+      if (priority === null) {
+        const { error } = await supabase
+          .from('leave_priorities')
+          .delete()
+          .eq('date', date)
+          .eq('member_id', memberId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('leave_priorities')
+          .upsert(
+            { date, member_id: memberId, priority, set_by: currentUserId },
+            { onConflict: 'date,member_id' }
+          );
+        if (error) throw error;
+      }
+      await loadData();
+    } catch (error) {
+      alert('순번 지정 실패했습니다.');
       console.error(error);
     }
   };
@@ -390,10 +434,34 @@ export default function LeaveCalendar({
             {getRequestsForDate(selectedDate, true).length === 0 ? (
               <p className="text-gray-500 text-sm">신청된 항목이 없습니다.</p>
             ) : (
-              getRequestsForDate(selectedDate, true).map((leave, idx) => {
+              [...getRequestsForDate(selectedDate, true)]
+                .sort((a, b) => {
+                  const aCancelled = a.status !== 'active';
+                  const bCancelled = b.status !== 'active';
+                  if (aCancelled !== bCancelled) return aCancelled ? 1 : -1;
+                  if (!aCancelled) {
+                    const aPriority = a.member_id
+                      ? priorities.get(priorityKey(selectedDate, a.member_id))
+                      : undefined;
+                    const bPriority = b.member_id
+                      ? priorities.get(priorityKey(selectedDate, b.member_id))
+                      : undefined;
+                    if (aPriority !== bPriority) {
+                      if (aPriority === undefined) return 1;
+                      if (bPriority === undefined) return -1;
+                      return aPriority - bPriority;
+                    }
+                  }
+                  return a.created_at.localeCompare(b.created_at);
+                })
+                .map((leave, idx) => {
                 const { name, rank } = getRequesterInfo(leave);
                 const cancelled = leave.status !== 'active';
                 const canCancel = !cancelled && (leave.member_id === currentUserId || isAdmin);
+                const priority =
+                  !cancelled && leave.member_id
+                    ? priorities.get(priorityKey(selectedDate, leave.member_id))
+                    : undefined;
                 return (
                   <div
                     key={idx}
@@ -405,6 +473,11 @@ export default function LeaveCalendar({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div>
+                        {priority && (
+                          <span className="mr-1 text-xs font-bold text-blue-700">
+                            {priority}순위
+                          </span>
+                        )}
                         <span className="font-semibold text-gray-900">
                           {name} {rank}
                         </span>{' '}
@@ -414,6 +487,27 @@ export default function LeaveCalendar({
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {!cancelled && isAdmin && leave.member_id && (
+                          <select
+                            value={priority ?? ''}
+                            onChange={(e) =>
+                              handleSetPriority(
+                                selectedDate,
+                                leave.member_id!,
+                                e.target.value ? Number(e.target.value) : null
+                              )
+                            }
+                            className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white"
+                            title="순번 지정"
+                          >
+                            <option value="">순번-</option>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={n}>
+                                {n}순위
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             cancelled
