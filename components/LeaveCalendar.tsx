@@ -417,7 +417,7 @@ export default function LeaveCalendar({
 
       {/* 범례 */}
       <div className="mt-6 pt-4 border-t border-gray-200">
-        <div className="text-sm text-gray-600 mb-2">범례:</div>
+        <div className="text-sm text-gray-600 mb-2">색상 안내:</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 shrink-0 rounded bg-green-100 border border-green-300"></div>
