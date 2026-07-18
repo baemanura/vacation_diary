@@ -184,7 +184,12 @@ export default function LeaveCalendar() {
               } ${status ? status.color : 'bg-white text-gray-600'}`}
             >
               <div className="text-sm font-bold text-gray-900">{day}</div>
-              <div className="w-full mt-0.5 space-y-0.5">
+              {requests.length > 0 && (
+                <div className="sm:hidden text-[10px] font-semibold text-gray-700 mt-0.5">
+                  {requests.length}명
+                </div>
+              )}
+              <div className="hidden sm:block w-full mt-0.5 space-y-0.5">
                 {requests.slice(0, 3).map((leave, idx) => {
                   const { name, type } = getRequesterInfo(leave);
                   return (
