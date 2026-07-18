@@ -30,7 +30,7 @@ export default function AdminPage() {
         .eq('id', data.session.user.id)
         .single();
 
-      // 총무만 접근 가능
+      // 서무만 접근 가능
       if (profileData?.role !== 'admin') {
         router.push('/dashboard');
         return;

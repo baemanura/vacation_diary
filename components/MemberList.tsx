@@ -106,7 +106,7 @@ export default function MemberList() {
                         className="px-2 py-1 border border-gray-300 rounded text-sm"
                       >
                         <option value="member">일반 대원</option>
-                        <option value="admin">총무</option>
+                        <option value="admin">서무</option>
                       </select>
                       <button
                         onClick={() => confirmRoleChange(member.id)}
@@ -129,7 +129,7 @@ export default function MemberList() {
                           : 'bg-gray-100 text-gray-800'
                       }`}
                     >
-                      {member.role === 'admin' ? '총무' : '일반'}
+                      {member.role === 'admin' ? '서무' : '일반'}
                     </span>
                   )}
                 </td>

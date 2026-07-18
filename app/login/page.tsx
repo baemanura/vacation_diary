@@ -66,7 +66,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <h1 className="text-3xl font-bold text-center mb-2 text-gray-800">
-          기동대 연가 시스템
+          3기동대 2제대 연가 관리 시스템
         </h1>
         <p className="text-center text-gray-600 mb-8">로그인</p>
 
@@ -116,7 +116,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-gray-600 text-sm mt-6">
-          처음 사용하시나요? 총무에게 아이디와 비밀번호를 받으세요.
+          처음 사용하시나요? 서무에게 아이디와 비밀번호를 받으세요.
         </p>
       </div>
     </div>
