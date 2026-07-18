@@ -13,8 +13,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://vacation-diary.vercel.app"),
   title: "3기 2제 실시간 연가표",
-  description: "3기동대 2제대 연가 관리 시스템",
+  description: "3기동대 2제대 연가 관리 시스템 - 연가·병가 신청 및 현황 관리",
+  openGraph: {
+    title: "3기 2제 실시간 연가표",
+    description: "3기동대 2제대 연가 관리 시스템 - 연가·병가 신청 및 현황 관리",
+    siteName: "3기 2제 실시간 연가표",
+    locale: "ko_KR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "3기 2제 실시간 연가표",
+    description: "3기동대 2제대 연가 관리 시스템 - 연가·병가 신청 및 현황 관리",
+  },
 };
 
 export default function RootLayout({
