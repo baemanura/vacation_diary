@@ -7,6 +7,7 @@ import { LogOut, Settings } from 'lucide-react';
 import LeaveCalendar from '@/components/LeaveCalendar';
 import LeaveRequestForm from '@/components/LeaveRequestForm';
 import BoardPosts from '@/components/BoardPosts';
+import OnlineUsers from '@/components/OnlineUsers';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -91,6 +92,11 @@ export default function DashboardPage() {
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
+          {/* 현재 접속자 */}
+          {user?.id && profile && (
+            <OnlineUsers currentUserId={user.id} name={profile.name} rank={profile.rank} />
+          )}
+
           {/* 달력 뷰 */}
           <LeaveCalendar
             key={refreshKey}
