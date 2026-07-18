@@ -95,8 +95,9 @@ export default function LeaveCalendar() {
   // 신청자 정보 가져오기
   const getRequesterInfo = (leave: LeaveRequest) => {
     const profile = leave.member_id ? profiles.get(leave.member_id) : null;
-    const name = profile ? `${profile.name}` : '알 수 없음';
-    return { name, type: leave.type };
+    const name = profile ? profile.name : '알 수 없음';
+    const rank = profile?.rank ?? '';
+    return { name, rank, type: leave.type };
   };
 
   // 해당 월의 첫 요일과 일수
@@ -238,10 +239,12 @@ export default function LeaveCalendar() {
               <p className="text-gray-500 text-sm">신청된 항목이 없습니다.</p>
             ) : (
               getRequestsForDate(selectedDate).map((leave, idx) => {
-                const { name } = getRequesterInfo(leave);
+                const { name, rank } = getRequesterInfo(leave);
                 return (
                   <div key={idx} className="p-2 bg-gray-50 rounded text-sm">
-                    <span className="font-semibold text-gray-900">{name}</span>{' '}
+                    <span className="font-semibold text-gray-900">
+                      {name} {rank}
+                    </span>{' '}
                     <span className="font-medium text-gray-900">{leave.type}</span>
                     {leave.sub_reason && (
                       <span className="text-gray-600"> ({leave.sub_reason})</span>
