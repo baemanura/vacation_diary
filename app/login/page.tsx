@@ -27,28 +27,29 @@ export default function LoginPage() {
       const name = parts.slice(0, -1).join(' ');
       const rank = parts[parts.length - 1];
 
-      // 프로필에서 이메일 찾기
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('name', name)
-        .eq('rank', rank)
-        .single();
+      // 서버 API를 통해 로그인
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          rank,
+          password,
+        }),
+      });
 
-      if (profileError || !profile) {
-        setError('일치하는 계정을 찾을 수 없습니다.');
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || '로그인에 실패했습니다.');
         return;
       }
 
-      // Supabase 직접 로그인
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile.email || `${name}_${rank}@unit.local`,
-        password,
-      });
-
-      if (signInError) {
-        setError('비밀번호가 일치하지 않습니다.');
-        return;
+      // 세션 저장
+      if (data.session) {
+        await supabase.auth.setSession(data.session);
       }
 
       // 로그인 성공 후 대시보드로 이동
