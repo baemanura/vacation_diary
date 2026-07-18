@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { LEAVE_TYPES, LEAVE_REASONS } from '@/lib/utils';
+import { LEAVE_TYPES, SUB_REASON_OPTIONS_BY_TYPE } from '@/lib/utils';
 
 export default function LeaveRequestForm({ currentUserId, onSuccess }: { currentUserId: string; onSuccess: () => void }) {
   const [formData, setFormData] = useState({
@@ -14,6 +14,8 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const subReasonOptions = SUB_REASON_OPTIONS_BY_TYPE[formData.type];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,8 +31,8 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
       return;
     }
 
-    if (formData.type === '연가' && !formData.subReason) {
-      setError('연가의 경우 사유를 선택해주세요.');
+    if (subReasonOptions && !formData.subReason) {
+      setError('사유를 선택해주세요.');
       return;
     }
 
@@ -61,7 +63,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
       const { error: insertError } = await supabase.from('leave_requests').insert({
         member_id: currentUserId,
         type: formData.type,
-        sub_reason: formData.type === '연가' ? formData.subReason : null,
+        sub_reason: subReasonOptions ? formData.subReason : null,
         start_date: formData.startDate,
         end_date: formData.endDate,
         note: formData.note || null,
@@ -114,7 +116,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
             </select>
           </div>
 
-          {formData.type === '연가' && (
+          {subReasonOptions && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">사유</label>
               <select
@@ -123,7 +125,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               >
                 <option value="">선택해주세요</option>
-                {LEAVE_REASONS.map((reason) => (
+                {subReasonOptions.map((reason) => (
                   <option key={reason} value={reason}>
                     {reason}
                   </option>

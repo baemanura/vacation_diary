@@ -82,8 +82,26 @@ export function formatDateFromTimestamp(dateString: string) {
   });
 }
 
-export const LEAVE_TYPES = ['연가', '병가', '공가', '교육', '출장'];
-export const LEAVE_REASONS = ['해외여행', '국내여행', '결혼식', '신혼여행', '출산휴가', '기타'];
+export const LEAVE_TYPES = ['연가', '병가', '공가', '교육', '출장', '휴직'];
+export const LEAVE_REASONS = [
+  '해외여행',
+  '국내여행',
+  '결혼식',
+  '신혼여행',
+  '출산휴가',
+  '가족돌봄',
+  '상견례',
+  '웨딩촬영',
+  '가족행사',
+  '기타',
+];
+export const LEAVE_OF_ABSENCE_REASONS = ['육아휴직', '유학휴직', '돌봄휴직', '질병휴직'];
+
+// 유형별로 사유 선택이 필요한 경우, 어떤 목록을 보여줄지 매핑한다.
+export const SUB_REASON_OPTIONS_BY_TYPE: Record<string, string[]> = {
+  연가: LEAVE_REASONS,
+  휴직: LEAVE_OF_ABSENCE_REASONS,
+};
 
 // 출동율별 가능인원(통상적으로 연가를 보낼 수 있는 인원).
 // 예비인원은 만일을 대비해 별도로 잡아두는 인원으로, 가능인원과 별개로 항상 2명이다.
