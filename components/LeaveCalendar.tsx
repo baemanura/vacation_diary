@@ -9,7 +9,7 @@ import {
   daysBetweenInclusive,
   type QuotaSetting,
 } from '@/lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 
 interface LeaveRequest {
   id: string;
@@ -20,6 +20,7 @@ interface LeaveRequest {
   status: string;
   created_at: string;
   cancelled_at: string | null;
+  cancel_reason: string | null;
   member_id?: string;
 }
 
@@ -29,7 +30,13 @@ interface Profile {
   rank: string;
 }
 
-export default function LeaveCalendar() {
+export default function LeaveCalendar({
+  currentUserId,
+  isAdmin = false,
+}: {
+  currentUserId?: string;
+  isAdmin?: boolean;
+} = {}) {
   const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 18)); // 7월 18일
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
@@ -102,6 +109,40 @@ export default function LeaveCalendar() {
     const name = profile ? profile.name : '알 수 없음';
     const rank = profile?.rank ?? '';
     return { name, rank, type: leave.type };
+  };
+
+  // 본인이 취소하면 사유 없이, 서무가 본인 것이 아닌 신청을 취소하면 사유를 받아 기록한다.
+  const handleCancel = async (leave: LeaveRequest) => {
+    const isSelf = leave.member_id === currentUserId;
+    let reason: string | null = null;
+
+    if (isSelf) {
+      if (!confirm('정말 취소하시겠습니까?')) return;
+    } else {
+      const input = prompt('취소 사유를 입력해주세요.');
+      if (input === null) return;
+      if (!input.trim()) {
+        alert('취소 사유를 입력해야 합니다.');
+        return;
+      }
+      reason = input.trim();
+    }
+
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancel_reason: reason,
+        })
+        .eq('id', leave.id);
+      if (error) throw error;
+      await loadData();
+    } catch (error) {
+      alert('취소 실패했습니다.');
+      console.error(error);
+    }
   };
 
   // 해당 월의 첫 요일과 일수
@@ -305,6 +346,7 @@ export default function LeaveCalendar() {
               getRequestsForDate(selectedDate, true).map((leave, idx) => {
                 const { name, rank } = getRequesterInfo(leave);
                 const cancelled = leave.status !== 'active';
+                const canCancel = !cancelled && (leave.member_id === currentUserId || isAdmin);
                 return (
                   <div
                     key={idx}
@@ -324,15 +366,26 @@ export default function LeaveCalendar() {
                           <span className="text-gray-600"> ({leave.sub_reason})</span>
                         )}
                       </div>
-                      <span
-                        className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
-                          cancelled
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}
-                      >
-                        {cancelled ? '취소됨' : '신청중'}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            cancelled
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {cancelled ? '취소됨' : '신청중'}
+                        </span>
+                        {canCancel && (
+                          <button
+                            onClick={() => handleCancel(leave)}
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                            title="취소"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {leave.start_date} ~ {leave.end_date}
@@ -346,6 +399,11 @@ export default function LeaveCalendar() {
                         </span>
                       )}
                     </div>
+                    {cancelled && leave.cancel_reason && (
+                      <div className="text-xs text-red-600 mt-0.5">
+                        취소 사유: {leave.cancel_reason}
+                      </div>
+                    )}
                   </div>
                 );
               })

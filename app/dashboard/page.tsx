@@ -92,7 +92,11 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
           {/* 달력 뷰 */}
-          <LeaveCalendar key={refreshKey} />
+          <LeaveCalendar
+            key={refreshKey}
+            currentUserId={user?.id}
+            isAdmin={profile?.role === 'admin'}
+          />
 
           {/* 신청 폼 */}
           <LeaveRequestForm currentUserId={user?.id} onSuccess={handleFormSuccess} />
