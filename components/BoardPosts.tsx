@@ -5,13 +5,19 @@ import { supabase } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils';
 import { Send, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
+interface Profile {
+  id: string;
+  name: string;
+  rank: string;
+}
+
 interface Comment {
   id: string;
   post_id: string;
   author_id: string;
   content: string;
   created_at: string;
-  profiles: { name: string; rank: string };
+  profiles?: Profile;
 }
 
 interface Post {
@@ -19,7 +25,7 @@ interface Post {
   author_id: string;
   content: string;
   created_at: string;
-  profiles: { name: string; rank: string };
+  profiles?: Profile;
   board_comments?: Comment[];
 }
 
@@ -53,27 +59,47 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
   const loadPosts = async () => {
     try {
       // 게시글 조회
-      const { data: postsData } = await supabase
+      const { data: postsData, error: postsError } = await supabase
         .from('board_posts')
-        .select('*, profiles(name, rank)')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(50);
 
-      // 각 게시글의 댓글 조회
-      const postsWithComments = await Promise.all(
-        (postsData || []).map(async (post) => {
-          const { data: commentsData } = await supabase
-            .from('board_comments')
-            .select('*, profiles(name, rank)')
-            .eq('post_id', post.id)
-            .order('created_at', { ascending: true });
+      if (postsError) console.error('게시글 조회 실패:', postsError);
 
-          return {
-            ...post,
-            board_comments: commentsData || [],
-          };
-        })
-      );
+      // 모든 댓글 조회
+      const { data: commentsData, error: commentsError } = await supabase
+        .from('board_comments')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (commentsError) console.error('댓글 조회 실패:', commentsError);
+
+      // 신청자 프로필 조회 후 매핑 (profiles와의 FK 관계가 없어 별도 조회 후 매핑)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, rank');
+
+      if (profileError) console.error('프로필 조회 실패:', profileError);
+
+      const profileMap = new Map<string, Profile>();
+      profileData?.forEach((p) => {
+        profileMap.set(p.id, p);
+      });
+
+      const commentsByPost = new Map<string, Comment[]>();
+      (commentsData || []).forEach((comment) => {
+        const withProfile = { ...comment, profiles: profileMap.get(comment.author_id) };
+        const existing = commentsByPost.get(comment.post_id) || [];
+        existing.push(withProfile);
+        commentsByPost.set(comment.post_id, existing);
+      });
+
+      const postsWithComments = (postsData || []).map((post) => ({
+        ...post,
+        profiles: profileMap.get(post.author_id),
+        board_comments: commentsByPost.get(post.id) || [],
+      }));
 
       setPosts(postsWithComments);
     } catch (error) {
@@ -100,14 +126,16 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
     setSubmittingComments(new Set([...submittingComments, postId]));
 
     try {
-      await supabase.from('board_comments').insert({
+      const { error } = await supabase.from('board_comments').insert({
         post_id: postId,
         author_id: currentUserId,
         content,
       });
 
+      if (error) throw error;
+
       setNewComments({ ...newComments, [postId]: '' });
-      loadPosts();
+      await loadPosts();
     } catch (error) {
       alert('댓글 작성 실패했습니다.');
       console.error(error);
@@ -120,10 +148,12 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
-      await supabase.from('board_comments').delete().eq('id', commentId);
-      loadPosts();
+      const { error } = await supabase.from('board_comments').delete().eq('id', commentId);
+      if (error) throw error;
+      await loadPosts();
     } catch (error) {
       alert('댓글 삭제 실패했습니다.');
+      console.error(error);
     }
   };
 
@@ -134,13 +164,15 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
     setSubmitting(true);
 
     try {
-      await supabase.from('board_posts').insert({
+      const { error } = await supabase.from('board_posts').insert({
         author_id: currentUserId,
         content: newPost.trim(),
       });
 
+      if (error) throw error;
+
       setNewPost('');
-      loadPosts();
+      await loadPosts();
     } catch (error) {
       alert('게시 실패했습니다.');
       console.error(error);
@@ -153,10 +185,12 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
     try {
-      await supabase.from('board_posts').delete().eq('id', id);
-      loadPosts();
+      const { error } = await supabase.from('board_posts').delete().eq('id', id);
+      if (error) throw error;
+      await loadPosts();
     } catch (error) {
       alert('삭제 실패했습니다.');
+      console.error(error);
     }
   };
 

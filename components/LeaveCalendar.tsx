@@ -237,17 +237,21 @@ export default function LeaveCalendar() {
             {getRequestsForDate(selectedDate).length === 0 ? (
               <p className="text-gray-500 text-sm">신청된 항목이 없습니다.</p>
             ) : (
-              getRequestsForDate(selectedDate).map((leave, idx) => (
-                <div key={idx} className="p-2 bg-gray-50 rounded text-sm">
-                  <span className="font-medium text-gray-900">{leave.type}</span>
-                  {leave.sub_reason && (
-                    <span className="text-gray-600"> ({leave.sub_reason})</span>
-                  )}
-                  <div className="text-xs text-gray-500">
-                    {leave.start_date} ~ {leave.end_date}
+              getRequestsForDate(selectedDate).map((leave, idx) => {
+                const { name } = getRequesterInfo(leave);
+                return (
+                  <div key={idx} className="p-2 bg-gray-50 rounded text-sm">
+                    <span className="font-semibold text-gray-900">{name}</span>{' '}
+                    <span className="font-medium text-gray-900">{leave.type}</span>
+                    {leave.sub_reason && (
+                      <span className="text-gray-600"> ({leave.sub_reason})</span>
+                    )}
+                    <div className="text-xs text-gray-500">
+                      {leave.start_date} ~ {leave.end_date}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

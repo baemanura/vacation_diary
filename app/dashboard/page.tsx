@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { LogOut, Settings } from 'lucide-react';
 import LeaveCalendar from '@/components/LeaveCalendar';
-import LeaveRequestsList from '@/components/LeaveRequestsList';
 import LeaveRequestForm from '@/components/LeaveRequestForm';
 import BoardPosts from '@/components/BoardPosts';
 
@@ -93,12 +92,7 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
           {/* 달력 뷰 */}
-          <LeaveCalendar />
-
-          {/* 연가 현황 목록 */}
-          <div key={refreshKey}>
-            <LeaveRequestsList currentUserId={user?.id} />
-          </div>
+          <LeaveCalendar key={refreshKey} />
 
           {/* 신청 폼 */}
           <LeaveRequestForm currentUserId={user?.id} onSuccess={handleFormSuccess} />
