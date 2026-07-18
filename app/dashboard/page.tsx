@@ -61,7 +61,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">3기동대 2제대 연가 관리 시스템</h1>
+              <h1 className="text-2xl font-bold text-gray-900">3기 2제 실시간 연가표</h1>
               <p className="text-gray-600">
                 {profile?.name} {profile?.rank} ({profile?.role === 'admin' ? '서무' : '대원'})
               </p>

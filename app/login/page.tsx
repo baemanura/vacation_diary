@@ -66,7 +66,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <h1 className="text-3xl font-bold text-center mb-2 text-gray-800">
-          3기동대 2제대 연가 관리 시스템
+          3기 2제 실시간 연가표
         </h1>
         <p className="text-center text-gray-600 mb-8">로그인</p>
 
