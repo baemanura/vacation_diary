@@ -15,12 +15,18 @@ interface LeaveRequest {
   status: string;
   created_at: string;
   cancelled_at: string | null;
-  profiles: { name: string; rank: string };
+  profiles?: { name: string; rank: string };
 }
 
 interface QuotaSettings {
   base_quota: number;
   max_quota: number;
+}
+
+interface Profile {
+  id: string;
+  name: string;
+  rank: string;
 }
 
 export default function LeaveRequestsList({ currentUserId }: { currentUserId: string }) {
@@ -66,18 +72,29 @@ export default function LeaveRequestsList({ currentUserId }: { currentUserId: st
       if (quotaError) console.error('정원 설정 로드 실패:', quotaError);
       setQuotaSettings(quota);
 
-      // 연가 신청 조회 (join 없이 먼저 테스트)
+      // 연가 신청 조회
       const { data: leaveData, error: leaveError } = await supabase
         .from('leave_requests')
         .select('*');
 
-      if (leaveError) {
-        console.error('연가 조회 실패:', leaveError);
-      } else {
-        console.log('조회된 연가 데이터:', leaveData);
-      }
+      if (leaveError) console.error('연가 조회 실패:', leaveError);
 
-      setLeaves(leaveData || []);
+      // 신청자 프로필 조회 후 매핑
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, name, rank');
+
+      const profileMap = new Map<string, Profile>();
+      profileData?.forEach((p) => {
+        profileMap.set(p.id, p);
+      });
+
+      const leavesWithProfiles = (leaveData || []).map((leave) => ({
+        ...leave,
+        profiles: profileMap.get(leave.member_id),
+      }));
+
+      setLeaves(leavesWithProfiles);
     } catch (error) {
       console.error('데이터 로드 실패:', error);
     } finally {
