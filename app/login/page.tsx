@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -10,6 +10,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // 로그인 후 이동할 대시보드 라우트를 미리 받아둬서 전환 시 버벅임을 줄인다.
+  useEffect(() => {
+    router.prefetch('/dashboard');
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +55,11 @@ export default function LoginPage() {
       // 세션 저장
       if (data.session) {
         await supabase.auth.setSession(data.session);
+      }
+
+      // 로그인 응답에 포함된 프로필을 캐시해 대시보드의 중복 조회를 생략한다.
+      if (data.profile) {
+        sessionStorage.setItem('login_profile_cache', JSON.stringify(data.profile));
       }
 
       // 로그인 성공 후 대시보드로 이동

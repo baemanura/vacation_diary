@@ -25,6 +25,15 @@ export default function DashboardPage() {
       }
       setUser(data.session.user);
 
+      // 로그인 화면에서 이미 조회한 프로필이 있으면 재사용해 중복 조회를 생략한다.
+      const cachedProfile = sessionStorage.getItem('login_profile_cache');
+      if (cachedProfile) {
+        sessionStorage.removeItem('login_profile_cache');
+        setProfile(JSON.parse(cachedProfile));
+        setLoading(false);
+        return;
+      }
+
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')

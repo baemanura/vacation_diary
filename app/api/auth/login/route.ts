@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     // 이름과 계급으로 프로필 찾기
     const { data: profile, error: profileError } = await adminSupabase
       .from('profiles')
-      .select('id, name, rank')
+      .select('*')
       .eq('name', name)
       .eq('rank', rank)
       .single();
@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         session: authData.session,
+        profile,
       },
       { status: 200 }
     );
