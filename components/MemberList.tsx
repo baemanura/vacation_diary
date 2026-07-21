@@ -85,22 +85,22 @@ export default function MemberList() {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="min-w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">이름</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">계급</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">역할</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">가입일</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">작업</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">이름</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">계급</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">역할</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">가입일</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">작업</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {members.map((member) => (
               <tr key={member.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{member.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-900">{member.rank}</td>
-                <td className="px-6 py-4 text-sm">
+                <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{member.name}</td>
+                <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{member.rank}</td>
+                <td className="px-6 py-4 text-sm whitespace-nowrap">
                   {editingId === member.id ? (
                     <div className="flex items-center gap-2">
                       <select
@@ -136,10 +136,10 @@ export default function MemberList() {
                     </span>
                   )}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600">
+                <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                   {formatDateFromTimestamp(member.created_at)}
                 </td>
-                <td className="px-6 py-4 text-sm space-x-3 flex">
+                <td className="px-6 py-4 text-sm space-x-3 flex whitespace-nowrap">
                   <button
                     onClick={() => handleRoleChange(member.id, member.role)}
                     className="text-blue-600 hover:text-blue-700 transition"

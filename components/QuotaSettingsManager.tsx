@@ -236,28 +236,28 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   적용 기간
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   출동율
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   가능인원
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   예비인원
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   총 한도
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   작성일
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
                   작업
                 </th>
               </tr>
@@ -267,19 +267,19 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                 const endDate = getDisplayEndDate(setting.effective_from);
                 return (
                 <tr key={setting.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
                     {setting.effective_from} ~ {endDate ?? '계속 적용'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{setting.dispatch_rate}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{setting.base_quota}명</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{setting.dispatch_rate}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{setting.base_quota}명</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
                     +{setting.max_quota - setting.base_quota}명
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{setting.max_quota}명</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
+                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{setting.max_quota}명</td>
+                  <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                     {formatDateFromTimestamp(setting.created_at)}
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 text-sm whitespace-nowrap">
                     <button
                       onClick={() => handleDelete(setting.id)}
                       className="text-red-600 hover:text-red-700 transition"
