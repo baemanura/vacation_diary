@@ -2,9 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 // Supabase 무료 플랜은 7일간 DB 활동이 없으면 프로젝트를 자동으로 일시정지한다.
-// 외부 크론(cron-job.org 등)이 이 엔드포인트를 주기적으로 호출해 가벼운 쿼리를 한 번
-// 발생시키는 것만으로 비활성 판정을 막을 수 있다.
+// 이 엔드포인트를 주기적으로 호출해 가벼운 쿼리를 한 번 발생시키는 것만으로 막을 수 있다.
+//
+// vercel.json의 crons가 매일 03:00 UTC(한국 시간 정오)에 여기를 호출한다.
+// Hobby 플랜은 하루 1회까지만 허용하므로 더 자주 부르려면 외부 크론을 함께 써야 한다.
+//
 // Route Handler는 기본적으로 캐시되지 않으므로 매 호출이 실제로 DB까지 도달한다.
+// (캐시되면 DB에 닿지 않아 활동으로 집계되지 않으니 이 점이 중요하다.)
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
