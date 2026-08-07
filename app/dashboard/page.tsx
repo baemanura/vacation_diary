@@ -3,45 +3,67 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, KeyRound } from 'lucide-react';
+import { needsPasswordChange } from '@/lib/utils';
 import LeaveCalendar from '@/components/LeaveCalendar';
 import LeaveRequestForm from '@/components/LeaveRequestForm';
 import BoardPosts from '@/components/BoardPosts';
 import OnlineUsers from '@/components/OnlineUsers';
+
+// 백엔드가 응답하지 않을 때 무한정 "로딩 중..."에 머물지 않도록 하는 상한.
+const LOAD_TIMEOUT_MS = 8000;
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data?.session) {
-        router.push('/login');
-        return;
-      }
-      setUser(data.session.user);
+      try {
+        // 서버가 죽어 있으면 응답 없이 계속 대기할 수 있어 시간 상한을 둔다.
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('로딩 시간 초과')), LOAD_TIMEOUT_MS)
+        );
 
-      // 로그인 화면에서 이미 조회한 프로필이 있으면 재사용해 중복 조회를 생략한다.
-      const cachedProfile = sessionStorage.getItem('login_profile_cache');
-      if (cachedProfile) {
-        sessionStorage.removeItem('login_profile_cache');
-        setProfile(JSON.parse(cachedProfile));
+        const { data } = await Promise.race([supabase.auth.getSession(), timeout]);
+        if (!data?.session) {
+          router.push('/login');
+          return;
+        }
+
+        // 임시 비밀번호를 쓰는 동안에는 본인 확인이 안 된 상태나 마찬가지라
+        // 연가표를 보기 전에 비밀번호부터 바꾸게 한다.
+        if (needsPasswordChange(data.session.user)) {
+          router.push('/change-password');
+          return;
+        }
+
+        setUser(data.session.user);
+
+        // 로그인 화면에서 이미 조회한 프로필이 있으면 재사용해 중복 조회를 생략한다.
+        const cachedProfile = sessionStorage.getItem('login_profile_cache');
+        if (cachedProfile) {
+          sessionStorage.removeItem('login_profile_cache');
+          setProfile(JSON.parse(cachedProfile));
+          setLoading(false);
+          return;
+        }
+
+        const { data: profileData } = await Promise.race([
+          supabase.from('profiles').select('*').eq('id', data.session.user.id).single(),
+          timeout,
+        ]);
+
+        setProfile(profileData);
         setLoading(false);
-        return;
+      } catch (error) {
+        console.error('대시보드 로드 실패:', error);
+        setFailed(true);
       }
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.session.user.id)
-        .single();
-
-      setProfile(profileData);
-      setLoading(false);
     };
 
     checkAuth();
@@ -55,6 +77,25 @@ export default function DashboardPage() {
   const handleFormSuccess = () => {
     setRefreshKey((prev) => prev + 1);
   };
+
+  if (failed) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <p className="text-gray-900 font-semibold mb-2">서버에 연결할 수 없습니다</p>
+          <p className="text-gray-600 text-sm mb-6">
+            일시적인 장애일 수 있습니다. 잠시 후 다시 시도해 주세요.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition"
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -86,6 +127,13 @@ export default function DashboardPage() {
                   관리
                 </button>
               )}
+              <button
+                onClick={() => router.push('/change-password')}
+                className="flex items-center gap-2 whitespace-nowrap bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition"
+              >
+                <KeyRound size={18} />
+                비밀번호
+              </button>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2 whitespace-nowrap bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition"

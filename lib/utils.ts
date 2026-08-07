@@ -1,3 +1,13 @@
+// 세션에 담긴 app_metadata를 보고 비밀번호를 아직 바꾸지 않았는지 판단한다.
+// 기존 계정에는 이 값이 없으므로, false로 명시된 경우에만 "이미 바꿨다"고 본다.
+// (서버의 판정 기준과 같아야 한다 — lib/serverAuth.ts의 mustChangePassword 참고)
+export function needsPasswordChange(
+  user: { app_metadata?: Record<string, unknown> } | null | undefined
+) {
+  if (!user) return false;
+  return user.app_metadata?.must_change_password !== false;
+}
+
 export function getQuotaStatus(current: number, base: number, max: number) {
   if (current <= base) {
     return { status: 'available', color: 'bg-green-100 text-green-800', label: '여유' };

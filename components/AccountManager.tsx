@@ -10,29 +10,20 @@ export default function AccountManager() {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [generatedPassword, setGeneratedPassword] = useState('');
-
-  // 비밀번호 (모든 대원 동일)
-  const password = 'test1234!';
-
-  // 이메일 자동 생성 (숫자 기반, 중복 없음)
-  const generateEmail = () => {
-    const timestamp = Date.now().toString().slice(-6); // 마지막 6자리
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `user_${timestamp}${random}@unit.local`;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
 
-    if (!formData.name || !formData.rank) {
+    const name = formData.name.trim();
+    const rank = formData.rank.trim();
+
+    if (!name || !rank) {
       setMessage('이름과 계급을 입력해주세요.');
       return;
     }
 
     setLoading(true);
-    const email = generateEmail();
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -49,11 +40,10 @@ export default function AccountManager() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
+        // 이메일과 초기 비밀번호는 서버에서 계정마다 새로 만든다.
         body: JSON.stringify({
-          name: formData.name,
-          rank: formData.rank,
-          email,
-          password,
+          name,
+          rank,
           role: 'member',
         }),
       });
@@ -66,7 +56,11 @@ export default function AccountManager() {
       }
 
       setMessage(
-        `✅ 계정이 생성되었습니다!\n\n로그인 정보:\n이름+계급: ${formData.name} ${formData.rank}\n비밀번호: ${password}\n\n로그인 페이지에서 "이름 계급"으로 로그인하세요.`
+        `✅ 계정이 생성되었습니다!\n\n` +
+          `이름+계급: ${name} ${rank}\n` +
+          `임시 비밀번호: ${data.initialPassword}\n\n` +
+          `⚠️ 이 임시 비밀번호는 지금 화면에만 표시되고 다시 확인할 수 없습니다.\n` +
+          `본인에게 직접 전달해주세요. 첫 로그인 시 본인 비밀번호로 변경하게 됩니다.`
       );
       setFormData({
         name: '',

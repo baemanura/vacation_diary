@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import {
   getQuotaStatus,
   getQuotaForDate,
@@ -43,7 +44,13 @@ export default function LeaveCalendar({
   currentUserId?: string;
   isAdmin?: boolean;
 } = {}) {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 18)); // 7월 18일
+  // 항상 "이번 달"로 시작한다. 고정 날짜를 쓰면 달이 바뀌어도 과거 달이 계속 보인다.
+  // (대시보드가 로딩을 끝낸 뒤에야 이 컴포넌트를 렌더링하므로 서버/클라이언트 날짜가
+  //  어긋나 하이드레이션이 깨질 일은 없다.)
+  const [currentDate, setCurrentDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
   const [quotaSettings, setQuotaSettings] = useState<QuotaSetting[]>([]);
@@ -53,6 +60,9 @@ export default function LeaveCalendar({
   useEffect(() => {
     loadData();
   }, [currentDate]);
+
+  // 다른 대원이 신청/취소하거나 서무가 순번·정원을 바꾸면 새로고침 없이 반영한다.
+  useLiveRefresh(['leave_requests', 'leave_priorities', 'quota_settings'], () => loadData());
 
   const loadData = async () => {
     try {
@@ -74,11 +84,14 @@ export default function LeaveCalendar({
       const daysInDataMonth = new Date(dataYear, dataMonth + 1, 0).getDate();
       const lastDay = `${dataYear}-${String(dataMonth + 1).padStart(2, '0')}-${String(daysInDataMonth).padStart(2, '0')}`;
 
+      // 이 달과 하루라도 겹치는 신청을 모두 가져온다.
+      // (start_date >= 1일 AND end_date <= 말일)로 조회하면 7/30~8/2처럼 달을 걸친
+      // 신청이 양쪽 달력에서 모두 빠져 인원 계산까지 틀어진다.
       const { data: leaveData, error: leaveError } = await supabase
         .from('leave_requests')
         .select('*')
-        .lte('end_date', lastDay)
-        .gte('start_date', firstDay)
+        .lte('start_date', lastDay)
+        .gte('end_date', firstDay)
         .order('created_at', { ascending: true });
 
       if (leaveError) console.error('연가 조회 실패:', leaveError);

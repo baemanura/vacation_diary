@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { formatDateTime } from '@/lib/utils';
 import { Send, Trash2 } from 'lucide-react';
 
@@ -40,8 +41,12 @@ export default function DateComments({
     loadComments();
   }, [date]);
 
-  const loadComments = async () => {
-    setLoading(true);
+  // 다른 대원이 같은 날짜에 단 댓글을 새로고침 없이 반영한다.
+  // 자동 갱신에서는 "불러오는 중..."이 깜빡이지 않도록 조용히 다시 읽는다.
+  useLiveRefresh(['date_comments'], () => loadComments({ silent: true }));
+
+  const loadComments = async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('date_comments')

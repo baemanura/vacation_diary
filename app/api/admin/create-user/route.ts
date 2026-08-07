@@ -1,64 +1,64 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin, isFailure } from '@/lib/serverAuth';
+import { generateInitialPassword } from '@/lib/password';
+import { randomInt } from 'node:crypto';
+
+// 로그인은 이름+계급으로 하므로 이메일은 표시되지 않는 내부 식별자일 뿐이다.
+// 클라이언트가 정하게 두지 않고 서버에서 충돌 없이 만든다.
+function generateEmail() {
+  const timestamp = Date.now().toString().slice(-6);
+  const random = randomInt(1000).toString().padStart(3, '0');
+  return `user_${timestamp}${random}@unit.local`;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const auth = await requireAdmin(request);
+    if (isFailure(auth)) return auth.error;
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json(
-        { error: '서버 설정이 누락되었습니다.' },
-        { status: 500 }
-      );
-    }
-
-    // Admin API를 사용하여 Supabase 클라이언트 생성
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    // 요청자가 로그인된 서무인지 확인 (그렇지 않으면 계정을 생성할 수 없다)
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-    }
-
-    const { data: callerData, error: callerError } = await supabase.auth.getUser(token);
-    if (callerError || !callerData.user) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-    }
-
-    const { data: callerProfile, error: callerProfileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', callerData.user.id)
-      .single();
-
-    if (callerProfileError || callerProfile?.role !== 'admin') {
-      return NextResponse.json({ error: '서무만 계정을 생성할 수 있습니다.' }, { status: 403 });
-    }
+    const { supabase } = auth;
 
     const body = await request.json();
-    const { email, password, name, rank, role = 'member' } = body;
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const rank = typeof body.rank === 'string' ? body.rank.trim() : '';
+    const role = body.role === 'admin' ? 'admin' : 'member';
 
-    if (!email || !password || !name || !rank) {
+    if (!name || !rank) {
+      return NextResponse.json({ error: '필수 정보가 누락되었습니다.' }, { status: 400 });
+    }
+
+    // 로그인은 "이름 + 계급"으로 사람을 특정하므로, 둘 다 같은 계정이 두 개 생기면
+    // 두 사람 모두 로그인할 수 없게 된다. 생성 단계에서 막는다.
+    const { data: duplicates, error: duplicateError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('name', name)
+      .eq('rank', rank);
+
+    if (duplicateError) {
       return NextResponse.json(
-        { error: '필수 정보가 누락되었습니다.' },
+        { error: `중복 확인 실패: ${duplicateError.message}` },
         { status: 400 }
       );
     }
 
-    // 1. Auth에 사용자 생성
+    if (duplicates && duplicates.length > 0) {
+      return NextResponse.json(
+        {
+          error: `이미 "${name} ${rank}" 계정이 있습니다. 이름과 계급이 모두 같으면 로그인할 때 구분할 수 없습니다.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // 계정마다 다른 초기 비밀번호를 발급하고, 첫 로그인 때 본인 것으로 바꾸게 한다.
+    const initialPassword = generateInitialPassword();
+
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password,
+      email: generateEmail(),
+      password: initialPassword,
       email_confirm: true, // 자동 확인
+      app_metadata: { must_change_password: true },
     });
 
     if (authError || !authData.user) {
@@ -68,26 +68,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. profiles 테이블에 프로필 생성
-    const { data: profileData, error: profileError } = await supabase
+    const { error: profileError } = await supabase
       .from('profiles')
-      .insert({
-        id: authData.user.id,
-        name,
-        rank,
-        role,
-      })
+      .insert({ id: authData.user.id, name, rank, role })
       .select()
       .single();
 
     if (profileError) {
-      // 프로필 생성 실패 시 생성된 Auth 사용자는 유지 (수동 삭제 필요)
+      // 프로필이 없으면 로그인 자체가 안 되는 반쪽 계정이 남는다.
+      // 방금 만든 Auth 계정을 되돌려 찌꺼기를 남기지 않는다.
+      await supabase.auth.admin.deleteUser(authData.user.id);
+
       return NextResponse.json(
-        {
-          error: `프로필 생성 실패: ${profileError.message}`,
-          userId: authData.user.id,
-          note: 'Auth 계정은 생성되었으나 프로필 등록에 실패했습니다. 수동으로 프로필을 등록하거나 계정을 삭제해주세요.',
-        },
+        { error: `프로필 생성 실패: ${profileError.message}` },
         { status: 400 }
       );
     }
@@ -96,21 +89,14 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         message: '계정이 생성되었습니다.',
-        user: {
-          id: authData.user.id,
-          email: authData.user.email,
-          name,
-          rank,
-          role,
-        },
+        user: { id: authData.user.id, name, rank, role },
+        // 이 값은 여기서 한 번만 내려간다. 저장해두지 않으므로 서무가 바로 전달해야 한다.
+        initialPassword,
       },
       { status: 201 }
     );
   } catch (error) {
     console.error('계정 생성 오류:', error);
-    return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }

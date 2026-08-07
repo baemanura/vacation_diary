@@ -26,6 +26,7 @@ export default function LoginPage() {
       const parts = nameRank.trim().split(/\s+/);
       if (parts.length < 2) {
         setError('이름과 계급을 함께 입력해주세요. (예: 홍길동 경사)');
+        setLoading(false);
         return;
       }
 
@@ -49,6 +50,7 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setError(data.error || '로그인에 실패했습니다.');
+        setLoading(false);
         return;
       }
 
@@ -57,17 +59,24 @@ export default function LoginPage() {
         await supabase.auth.setSession(data.session);
       }
 
+      // 임시 비밀번호로 들어왔으면 대시보드 대신 비밀번호 변경 화면으로 보낸다.
+      if (data.mustChangePassword) {
+        router.push('/change-password');
+        return;
+      }
+
       // 로그인 응답에 포함된 프로필을 캐시해 대시보드의 중복 조회를 생략한다.
       if (data.profile) {
         sessionStorage.setItem('login_profile_cache', JSON.stringify(data.profile));
       }
 
-      // 로그인 성공 후 대시보드로 이동
+      // 로그인 성공 후 대시보드로 이동.
+      // 화면이 바뀔 때까지 버튼을 잠가둬야 중복 로그인 요청이 나가지 않으므로
+      // 여기서는 loading을 풀지 않는다.
       router.push('/dashboard');
     } catch (err) {
       setError('오류가 발생했습니다.');
       console.error(err);
-    } finally {
       setLoading(false);
     }
   };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { formatDateTime } from '@/lib/utils';
 import { Send, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -40,21 +41,10 @@ export default function BoardPosts({ currentUserId }: { currentUserId: string })
 
   useEffect(() => {
     loadPosts();
-
-    // 일단 Realtime 구독 비활성화 (나중에 수정)
-    // const subscription = supabase
-    //   .channel('board_posts')
-    //   .on(
-    //     'postgres_changes',
-    //     { event: '*', schema: 'public', table: 'board_posts' },
-    //     () => loadPosts()
-    //   )
-    //   .subscribe();
-
-    // return () => {
-    //   subscription.unsubscribe();
-    // };
   }, []);
+
+  // 다른 대원이 올린 글·댓글을 새로고침 없이 반영한다.
+  useLiveRefresh(['board_posts', 'board_comments'], () => loadPosts());
 
   const loadPosts = async () => {
     try {

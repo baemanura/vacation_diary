@@ -2,7 +2,15 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { LEAVE_TYPES, SUB_REASON_OPTIONS_BY_TYPE } from '@/lib/utils';
+import {
+  LEAVE_TYPES,
+  SUB_REASON_OPTIONS_BY_TYPE,
+  daysBetweenInclusive,
+  getTodayString,
+} from '@/lib/utils';
+
+// 한 번에 신청할 수 있는 최대 일수. 날짜 오입력을 걸러내기 위한 상한이다.
+const MAX_REQUEST_DAYS = 90;
 
 export default function LeaveRequestForm({ currentUserId, onSuccess }: { currentUserId: string; onSuccess: () => void }) {
   const [formData, setFormData] = useState({
@@ -34,6 +42,20 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
     if (subReasonOptions && !formData.subReason) {
       setError('사유를 선택해주세요.');
       return;
+    }
+
+    // 연도를 잘못 입력하는 실수(2026 → 2027 등)를 걸러낸다.
+    const days = daysBetweenInclusive(formData.startDate, formData.endDate);
+    if (days > MAX_REQUEST_DAYS) {
+      setError(`한 번에 ${MAX_REQUEST_DAYS}일까지만 신청할 수 있습니다. 날짜를 확인해주세요.`);
+      return;
+    }
+
+    // 지난 날짜 신청이 필요한 경우도 있어 막지는 않고, 실수인지 한 번 확인만 받는다.
+    if (formData.startDate < getTodayString()) {
+      if (!confirm(`시작일(${formData.startDate})이 오늘보다 이전입니다. 그대로 신청할까요?`)) {
+        return;
+      }
     }
 
     setLoading(true);
