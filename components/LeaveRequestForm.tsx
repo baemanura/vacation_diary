@@ -6,6 +6,7 @@ import {
   LEAVE_TYPES,
   SUB_REASON_OPTIONS_BY_TYPE,
   daysBetweenInclusive,
+  describeUnexpectedError,
   getTodayString,
 } from '@/lib/utils';
 
@@ -97,6 +98,16 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
           setError('이미 신청한 다른 유형과 날짜가 겹쳐 신청할 수 없습니다.');
           return;
         }
+        // 서버가 허용하는 유형 목록(DB의 check 제약조건)에 없는 값을 고른 경우.
+        // 앱에만 유형을 추가하고 DB를 함께 고치지 않으면 여기로 온다 — 대원이 다시
+        // 시도해서 풀 수 있는 문제가 아니므로 무엇이 문제인지 분명히 알린다.
+        if (insertError.code === '23514') {
+          setError(
+            `'${formData.type}'은(는) 서버에 아직 등록되지 않은 유형이라 신청할 수 없습니다.\n` +
+              `다른 유형으로 신청하시고, 서무에게 이 화면을 알려주세요. [23514]`
+          );
+          return;
+        }
         throw insertError;
       }
 
@@ -110,7 +121,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
       onSuccess();
       alert('신청이 완료되었습니다.');
     } catch (err) {
-      setError('신청 실패. 다시 시도해주세요.');
+      setError(describeUnexpectedError(err, '신청'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -191,7 +202,11 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
           />
         </div>
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm whitespace-pre-line break-words">
+            {error}
+          </div>
+        )}
 
         <button
           type="submit"

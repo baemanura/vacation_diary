@@ -9,6 +9,7 @@ import {
   formatDateTime,
   daysBetweenInclusive,
   addDays,
+  describeUnexpectedError,
   getTodayString,
   type QuotaSetting,
 } from '@/lib/utils';
@@ -224,7 +225,7 @@ export default function LeaveCalendar({
 
       await loadData();
     } catch (error) {
-      alert('취소 실패했습니다.');
+      alert(describeUnexpectedError(error, '취소'));
       console.error(error);
     }
   };
@@ -250,7 +251,7 @@ export default function LeaveCalendar({
       }
       await loadData();
     } catch (error) {
-      alert('순번 지정 실패했습니다.');
+      alert(describeUnexpectedError(error, '순번 지정'));
       console.error(error);
     }
   };

@@ -8,6 +8,30 @@ export function needsPasswordChange(
   return user.app_metadata?.must_change_password !== false;
 }
 
+/**
+ * 예상하지 못한 오류를 대원이 그대로 읽어 전달할 수 있는 문장으로 바꾼다.
+ *
+ * "다시 시도해주세요"만 보여주면, 재시도로는 절대 풀리지 않는 문제(예: 서버가 허용하지
+ * 않는 유형을 고른 경우)를 대원이 계속 다시 눌러보게 되고 진짜 원인은 콘솔에만 남는다.
+ * 코드까지 화면에 남겨두면 대원 → 서무 → 개발자로 그대로 옮겨적을 수 있다.
+ */
+export function describeUnexpectedError(error: unknown, action: string) {
+  const e = error as { code?: string; message?: string } | null;
+  const code = e?.code;
+  const message = e?.message;
+
+  // 서버가 돌려준 오류에는 항상 코드가 붙는다. 코드가 없으면 요청이 서버에 닿지도
+  // 못한 것(연결 끊김 등)이므로, 이때는 재시도가 실제로 맞는 조치다.
+  if (!code) {
+    return `${action}에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.`;
+  }
+
+  return (
+    `${action}에 실패했습니다. 다시 시도해도 안 되면 아래 내용을 서무에게 알려주세요.\n` +
+    `[${code ?? '코드 없음'}] ${message ?? ''}`.trim()
+  );
+}
+
 export function getQuotaStatus(current: number, base: number, max: number) {
   if (current <= base) {
     return { status: 'available', color: 'bg-green-100 text-green-800', label: '여유' };
