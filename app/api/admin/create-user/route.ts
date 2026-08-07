@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, isFailure } from '@/lib/serverAuth';
-import { generateInitialPassword } from '@/lib/password';
+import { INITIAL_PASSWORD } from '@/lib/password';
 import { randomInt } from 'node:crypto';
 
 // 로그인은 이름+계급으로 하므로 이메일은 표시되지 않는 내부 식별자일 뿐이다.
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 계정마다 다른 초기 비밀번호를 발급하고, 첫 로그인 때 본인 것으로 바꾸게 한다.
-    const initialPassword = generateInitialPassword();
-
+    // 서무가 불러주고 대원이 받아적기 쉽도록 초기 비밀번호는 정해진 값을 쓴다.
+    // 모두가 아는 값이므로 첫 로그인 때 반드시 본인 것으로 바꾸게 한다
+    // (아래 app_metadata의 must_change_password가 그 역할을 한다).
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: generateEmail(),
-      password: initialPassword,
+      password: INITIAL_PASSWORD,
       email_confirm: true, // 자동 확인
       app_metadata: { must_change_password: true },
     });
@@ -90,8 +90,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: '계정이 생성되었습니다.',
         user: { id: authData.user.id, name, rank, role },
-        // 이 값은 여기서 한 번만 내려간다. 저장해두지 않으므로 서무가 바로 전달해야 한다.
-        initialPassword,
+        initialPassword: INITIAL_PASSWORD,
       },
       { status: 201 }
     );

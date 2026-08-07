@@ -58,9 +58,9 @@ export default function AccountManager() {
       setMessage(
         `✅ 계정이 생성되었습니다!\n\n` +
           `이름+계급: ${name} ${rank}\n` +
-          `임시 비밀번호: ${data.initialPassword}\n\n` +
-          `⚠️ 이 임시 비밀번호는 지금 화면에만 표시되고 다시 확인할 수 없습니다.\n` +
-          `본인에게 직접 전달해주세요. 첫 로그인 시 본인 비밀번호로 변경하게 됩니다.`
+          `초기 비밀번호: ${data.initialPassword}\n\n` +
+          `본인에게 전달해주세요. 첫 로그인 시 본인 비밀번호로 변경하게 됩니다.\n` +
+          `⚠️ 초기 비밀번호는 누구나 아는 값이므로, 전달 후 바로 접속해 변경하도록 안내해주세요.`
       );
       setFormData({
         name: '',

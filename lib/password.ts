@@ -11,6 +11,13 @@ const SAFE_DIGITS = '23456789';
 export const MIN_PASSWORD_LENGTH = 8;
 
 /**
+ * 새 계정에 공통으로 넣어주는 초기 비밀번호.
+ * 외우기 쉬운 값을 쓰는 대신, 첫 로그인 때 반드시 본인 비밀번호로 바꾸게 해서
+ * 이 값이 계속 쓰이는 일이 없도록 한다.
+ */
+export const INITIAL_PASSWORD = 'knp123';
+
+/**
  * 계정마다 다른 초기 비밀번호를 만든다.
  * 전 대원이 같은 비밀번호를 쓰면 이름·계급만 알아도 남으로 로그인할 수 있어서,
  * 계정별로 무작위 값을 발급하고 첫 로그인 때 본인 비밀번호로 바꾸게 한다.
@@ -61,9 +68,10 @@ export function validateNewPassword(password: unknown): string | null {
     return '비밀번호에 공백은 사용할 수 없습니다.';
   }
 
-  // 예전에 전 대원이 함께 쓰던 값으로 되돌리는 것을 막는다.
-  if (password === 'test1234!') {
-    return '기존 공용 비밀번호는 사용할 수 없습니다. 본인만 아는 비밀번호로 정해주세요.';
+  // 모두가 아는 값(예전 공용 비밀번호, 신규 계정 초기 비밀번호)으로 되돌리는 것을 막는다.
+  // 이걸 허용하면 강제 변경을 시켜도 아무 의미가 없어진다.
+  if (password === 'test1234!' || password === INITIAL_PASSWORD) {
+    return '모두가 아는 비밀번호는 사용할 수 없습니다. 본인만 아는 비밀번호로 정해주세요.';
   }
 
   return null;
