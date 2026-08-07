@@ -8,6 +8,7 @@ import { needsPasswordChange } from '@/lib/utils';
 import QuotaSettingsManager from '@/components/QuotaSettingsManager';
 import AccountManager from '@/components/AccountManager';
 import MemberList from '@/components/MemberList';
+import AdminGuide from '@/components/AdminGuide';
 
 // 백엔드가 응답하지 않을 때 무한정 "로딩 중..."에 머물지 않도록 하는 상한.
 const LOAD_TIMEOUT_MS = 8000;
@@ -154,6 +155,9 @@ export default function AdminPage() {
 
       {/* 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 서무가 바뀌어도 인수인계 없이 운영할 수 있도록 항상 위에 둔다. */}
+        <AdminGuide />
+
         {activeTab === 'quota' && <QuotaSettingsManager currentUserId={user?.id} />}
         {activeTab === 'account' && <AccountManager />}
         {activeTab === 'members' && <MemberList />}
