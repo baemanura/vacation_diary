@@ -9,6 +9,7 @@ import LeaveCalendar from '@/components/LeaveCalendar';
 import LeaveRequestForm from '@/components/LeaveRequestForm';
 import BoardPosts from '@/components/BoardPosts';
 import OnlineUsers from '@/components/OnlineUsers';
+import InstallGuide from '@/components/InstallGuide';
 
 // 백엔드가 응답하지 않을 때 무한정 "로딩 중..."에 머물지 않도록 하는 상한.
 const LOAD_TIMEOUT_MS = 8000;
@@ -149,6 +150,9 @@ export default function DashboardPage() {
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
+          {/* 홈 화면 추가 안내 (이미 앱으로 실행 중이거나 닫았으면 표시되지 않는다) */}
+          <InstallGuide />
+
           {/* 현재 접속자 */}
           {user?.id && profile && (
             <OnlineUsers currentUserId={user.id} name={profile.name} rank={profile.rank} />

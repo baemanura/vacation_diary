@@ -40,7 +40,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
     }
 
     if (subReasonOptions && !formData.subReason) {
-      setError('사유를 선택해주세요.');
+      setError(formData.type === '연가' ? '구분을 선택해주세요.' : '사유를 선택해주세요.');
       return;
     }
 
@@ -140,7 +140,9 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
 
           {subReasonOptions && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">사유</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {formData.type === '연가' ? '구분' : '사유'}
+              </label>
               <select
                 value={formData.subReason}
                 onChange={(e) => setFormData({ ...formData, subReason: e.target.value })}
@@ -183,7 +185,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
           <textarea
             value={formData.note}
             onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-            placeholder="필요한 사항이 있으면 작성해주세요."
+            placeholder="필요한 사항이 있으면 작성해주세요 (해외, 국내, 결혼 등)"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             rows={3}
           />

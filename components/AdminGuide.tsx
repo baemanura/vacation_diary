@@ -33,7 +33,7 @@ export default function AdminGuide() {
       >
         <span className="flex items-center gap-2 font-semibold text-gray-900">
           <BookOpen size={18} className="text-blue-600 shrink-0" />
-          서무 사용 안내 — 처음 맡으셨다면 먼저 읽어주세요
+          서무 사용 안내
         </span>
         {open ? (
           <ChevronUp size={18} className="text-gray-400 shrink-0" />
@@ -155,57 +155,40 @@ export default function AdminGuide() {
             </ul>
           </Section>
 
-          <Section title="사이트가 안 열릴 때">
+          <Section title="신청 유형과 연가 구분">
             <p>
-              연가 기록은 <B>Supabase</B>라는 무료 데이터베이스에 저장됩니다. 이 무료 플랜에는
-              <B> 7일 동안 아무도 접속하지 않으면 자동으로 잠자기 모드</B>가 되는 규칙이 있습니다.
-              잠자기 상태에서는 로그인도 달력도 열리지 않습니다.{' '}
-              <B>데이터가 지워진 것은 아닙니다.</B>
+              신청 유형은 <B>연가 · 병가 · 공가 · 특가 · 교육 · 출장 · 휴직</B> 입니다.
             </p>
             <p className="mt-2">
-              이를 막기 위해 <B>매일 한국시간 정오에 자동으로 신호를 보내는 장치</B>가 걸려
-              있습니다. 평소에는 신경 쓰지 않으셔도 됩니다.
+              연가를 고르면 <B>구분</B>을 함께 고르게 되어 있습니다 — <Code>일반</Code>(하루 종일),{' '}
+              <Code>오전</Code>, <Code>오후</Code>. 반일만 쓰는 경우를 구분하기 위한 것입니다.
             </p>
-            <p className="mt-2">그래도 사이트가 안 열린다면:</p>
-            <ol className="mt-1 space-y-1 list-decimal list-inside">
-              <li>몇 분 뒤 다시 접속해봅니다.</li>
-              <li>
-                그래도 안 되면{' '}
-                <a
-                  href="https://supabase.com/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline"
-                >
-                  Supabase 대시보드
-                </a>
-                에 로그인해 프로젝트가 <Code>Paused</Code> 상태인지 확인합니다.
-              </li>
-              <li>
-                <Code>Paused</Code>라면 <B>Restore</B> 버튼을 누르고 몇 분 기다립니다. 그러면
-                그대로 복구됩니다.
-              </li>
-            </ol>
+            <Callout tone="warn">
+              여행·결혼식 같은 <B>구체적인 사정은 목록에서 고르지 않고</B>, 대원이 신청 화면의{' '}
+              <B>추가 사항</B> 칸에 직접 적습니다. 적지 않아도 신청은 됩니다.
+            </Callout>
           </Section>
 
-          <Section title="서무를 넘겨줄 때 함께 전달할 것">
-            <p>이 사이트는 세 개의 무료 서비스 위에서 돌아갑니다. 계정 정보를 함께 넘겨주세요.</p>
-            <ul className="mt-1 space-y-1 list-disc list-inside">
+          <Section title="대원에게 안내할 것 — 홈 화면에 앱처럼 추가하기">
+            <p>
+              카카오톡으로 링크를 받아 매번 들어오는 대신, <B>휴대폰 홈 화면에 아이콘</B>을 만들어
+              두면 바로 들어올 수 있습니다. 대시보드 맨 위에 기기에 맞는 안내가 자동으로 뜹니다.
+            </p>
+            <Callout tone="warn">
+              <B>카카오톡 안에서는 홈 화면 추가가 되지 않습니다.</B> 반드시 크롬이나 Safari로 한 번
+              옮겨서 추가해야 합니다. 카카오톡 화면 오른쪽 아래 <B>⋯</B> →{' '}
+              <B>다른 브라우저로 열기</B>를 누르면 됩니다. 이 과정은 <B>한 번만</B> 하면 됩니다.
+            </Callout>
+            <ul className="mt-2 space-y-1 list-disc list-inside">
               <li>
-                <B>Supabase</B> — 연가 기록·계정이 저장된 곳. 잠자기 복구할 때 필요합니다.
+                <B>안드로이드</B> — 크롬으로 열면 [홈 화면에 추가] 버튼이 바로 나옵니다.
               </li>
               <li>
-                <B>Vercel</B> — 사이트가 실제로 돌아가는 곳.
-              </li>
-              <li>
-                <B>GitHub</B> — 사이트를 만드는 코드가 있는 곳.
+                <B>아이폰</B> — Safari 아래쪽 공유 버튼 → <B>홈 화면에 추가</B> → <B>추가</B>.
               </li>
             </ul>
-            <p className="mt-2">
-              평소 운영(계정 생성, 정원 설정, 연가 관리)에는 <B>이 관리 페이지만</B> 있으면 되고,
-              위 세 곳은 사이트가 멈추거나 기능을 고칠 때만 씁니다.
-            </p>
           </Section>
+
         </div>
       )}
     </div>

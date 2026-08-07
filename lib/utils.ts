@@ -99,19 +99,11 @@ export function formatDateFromTimestamp(dateString: string) {
   });
 }
 
-export const LEAVE_TYPES = ['연가', '병가', '공가', '교육', '출장', '휴직'];
-export const LEAVE_REASONS = [
-  '해외여행',
-  '국내여행',
-  '결혼식',
-  '신혼여행',
-  '출산휴가',
-  '가족돌봄',
-  '상견례',
-  '웨딩촬영',
-  '가족행사',
-  '기타',
-];
+export const LEAVE_TYPES = ['연가', '병가', '공가', '특가', '교육', '출장', '휴직'];
+// 연가는 하루를 다 쓰는지(일반), 반일만 쓰는지(오전/오후)만 고른다.
+// 여행·결혼식 같은 구체적인 사정은 목록으로 못 다 담고 사생활이기도 해서,
+// 필요한 사람만 신청 화면의 '추가 사항'에 직접 적도록 안내한다.
+export const LEAVE_REASONS = ['일반', '오전', '오후'];
 export const LEAVE_OF_ABSENCE_REASONS = ['육아휴직', '유학휴직', '돌봄휴직', '질병휴직'];
 
 // 유형별로 사유 선택이 필요한 경우, 어떤 목록을 보여줄지 매핑한다.

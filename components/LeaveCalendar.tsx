@@ -511,7 +511,9 @@ export default function LeaveCalendar({
                           {name} {rank}
                         </span>{' '}
                         <span className="font-medium text-gray-900">{leave.type}</span>
-                        {leave.sub_reason && (
+                        {/* 연가 '일반'은 하루를 다 쓴다는 뜻이라 굳이 적지 않고,
+                            반일(오전/오후)일 때만 눈에 띄게 표시한다. */}
+                        {leave.sub_reason && leave.sub_reason !== '일반' && (
                           <span className="text-gray-600"> ({leave.sub_reason})</span>
                         )}
                       </div>
@@ -604,6 +606,7 @@ const TYPE_BADGE_COLOR: Record<string, string> = {
   연가: 'bg-green-100 text-green-700',
   병가: 'bg-blue-100 text-blue-700',
   공가: 'bg-purple-100 text-purple-700',
+  특가: 'bg-teal-100 text-teal-700',
   교육: 'bg-amber-100 text-amber-700',
   출장: 'bg-orange-100 text-orange-700',
   휴직: 'bg-pink-100 text-pink-700',
