@@ -10,8 +10,13 @@
 2. 로그인하면 **자기 제대 것만 보인다**. 다른 제대는 존재조차 안 보인다
 3. **통합 관리자**는 모든 제대를 볼 수 있다. **보기만 가능하고 고칠 수 없다**
 4. 각 제대는 지금처럼 **제대 서무가 각자 관리**한다
-5. **자유게시판도 제대별로 분리**한다 (공지 포함)
-6. 통합 관리자 계정은 **새로 만든다**
+5. **자유게시판도 제대별로 분리**한다
+6. 다만 **전 제대 공지**는 가능해야 한다 — 통합 관리자가 세 제대 모두에게 띄우는 글
+7. 통합 관리자 계정은 **새로 만든다**
+
+> 6번 때문에 통합 관리자가 **유일하게 쓸 수 있는 것이 전 제대 공지 하나**가 된다.
+> 그 외에는 여전히 아무것도 고치지 못한다. 이 예외는 DB 권한을 열어서가 아니라
+> **서버 경로 하나로만** 열어둔다(아래 "전 제대 공지" 참고).
 
 ## 왜 배포를 나누지 않는가
 
@@ -54,7 +59,11 @@
 쓸 조건이 없다.** 칸을 두면 규칙이 `unit = 내 제대` 한 줄로 끝난다.
 
 값이 어긋날 걱정은 **트리거로 없앤다** — 저장할 때 작성자의 제대를 DB가 직접 채운다.
-앱이 보내주는 값을 믿지 않으므로 조작할 수도 없다.
+
+> ⚠️ **트리거만으로는 부족하다.** 트리거는 값이 비어 있을 때만 채운다. 앱이 `unit`을 직접
+> 지정해 보내면 트리거는 건너뛴다. 그래서 **저장 규칙(INSERT 정책)에도
+> `unit = my_unit()` 조건을 반드시 넣는다.** 이게 빠지면 마음먹은 사람이 `3제대`라고 적어
+> 다른 제대에 글을 꽂을 수 있다. 아래 4단계 정책에 모두 반영돼 있다.
 
 사람이 제대를 옮기면 **지난 기록은 예전 제대로 남는다.** 그때 그 제대에서 쓴 연가가
 맞으므로 이게 옳다.
@@ -195,16 +204,19 @@ CREATE POLICY sel ON profiles FOR SELECT TO authenticated
 CREATE POLICY sel ON leave_requests FOR SELECT TO authenticated
   USING (unit = my_unit() OR my_role() = 'super');
 CREATE POLICY ins ON leave_requests FOR INSERT TO authenticated
-  WITH CHECK (member_id = auth.uid());
+  WITH CHECK (member_id = auth.uid() AND unit = my_unit());
 CREATE POLICY upd ON leave_requests FOR UPDATE TO authenticated
   USING (member_id = auth.uid() OR (my_role() = 'admin' AND unit = my_unit()))
   WITH CHECK (member_id = auth.uid() OR (my_role() = 'admin' AND unit = my_unit()));
 
--- board_posts (공지 지정은 서버 전용이므로 여기에 없다)
+-- board_posts
+--  · 공지 지정과 전 제대 공지는 서버 전용이라 여기에 없다.
+--  · '전체'로 표시된 글은 모든 제대에 보인다. 대원은 자기 제대 글만 쓸 수 있으므로
+--    저장 규칙의 unit = my_unit() 조건이 '전체' 글을 스스로 만드는 것을 막는다.
 CREATE POLICY sel ON board_posts FOR SELECT TO authenticated
-  USING (unit = my_unit() OR my_role() = 'super');
+  USING (unit = my_unit() OR unit = '전체' OR my_role() = 'super');
 CREATE POLICY ins ON board_posts FOR INSERT TO authenticated
-  WITH CHECK (author_id = auth.uid());
+  WITH CHECK (author_id = auth.uid() AND unit = my_unit());
 CREATE POLICY upd ON board_posts FOR UPDATE TO authenticated
   USING (author_id = auth.uid()) WITH CHECK (author_id = auth.uid());
 CREATE POLICY del ON board_posts FOR DELETE TO authenticated
@@ -214,7 +226,7 @@ CREATE POLICY del ON board_posts FOR DELETE TO authenticated
 CREATE POLICY sel ON board_comments FOR SELECT TO authenticated
   USING (unit = my_unit() OR my_role() = 'super');
 CREATE POLICY ins ON board_comments FOR INSERT TO authenticated
-  WITH CHECK (author_id = auth.uid());
+  WITH CHECK (author_id = auth.uid() AND unit = my_unit());
 CREATE POLICY upd ON board_comments FOR UPDATE TO authenticated
   USING (author_id = auth.uid()) WITH CHECK (author_id = auth.uid());
 CREATE POLICY del ON board_comments FOR DELETE TO authenticated
@@ -224,7 +236,7 @@ CREATE POLICY del ON board_comments FOR DELETE TO authenticated
 CREATE POLICY sel ON date_comments FOR SELECT TO authenticated
   USING (unit = my_unit() OR my_role() = 'super');
 CREATE POLICY ins ON date_comments FOR INSERT TO authenticated
-  WITH CHECK (author_id = auth.uid());
+  WITH CHECK (author_id = auth.uid() AND unit = my_unit());
 CREATE POLICY del ON date_comments FOR DELETE TO authenticated
   USING (author_id = auth.uid() OR (my_role() = 'admin' AND unit = my_unit()));
 
@@ -232,7 +244,7 @@ CREATE POLICY del ON date_comments FOR DELETE TO authenticated
 CREATE POLICY sel ON leave_priorities FOR SELECT TO authenticated
   USING (unit = my_unit() OR my_role() = 'super');
 CREATE POLICY ins ON leave_priorities FOR INSERT TO authenticated
-  WITH CHECK (my_role() = 'admin' AND set_by = auth.uid());
+  WITH CHECK (my_role() = 'admin' AND set_by = auth.uid() AND unit = my_unit());
 CREATE POLICY upd ON leave_priorities FOR UPDATE TO authenticated
   USING (my_role() = 'admin' AND unit = my_unit())
   WITH CHECK (my_role() = 'admin' AND unit = my_unit());
@@ -271,6 +283,50 @@ GRANT  UPDATE (content, updated_at) ON board_comments TO authenticated;
 
 ---
 
+## 전 제대 공지
+
+세 제대 모두에게 띄우는 글. `board_posts.unit` 에 제대 대신 **`'전체'`** 를 넣어 표시한다.
+
+### 왜 이 방식인가
+
+- 표를 따로 만들지 않으므로 게시판 화면을 그대로 쓴다
+- 조회 규칙이 `unit = 내 제대 **또는** unit = '전체'` 한 줄로 끝난다
+- 대원과 제대 서무는 저장 규칙(`unit = my_unit()`)에 막혀 **스스로 '전체' 글을 만들 수 없다**
+
+### 누가 쓰는가
+
+통합 관리자만 쓴다. 그런데 통합 관리자는 DB 권한이 **읽기 전용**이다. 그래서 이 글만
+**서버 경로로 쓴다** — 지금 공지 지정(`/api/admin/toggle-notice`)이 쓰는 방식과 같다.
+
+```
+POST /api/admin/global-notice   (신규)
+  · 요청자가 role = 'super' 인지 서버가 확인
+  · service_role 로 board_posts 에 unit = '전체' 로 저장
+  · is_notice = true 로 함께 저장 (전 제대에 알릴 글이니 항상 맨 위에 둔다)
+  · 수정·삭제도 같은 경로로 (본인이 쓴 전체 공지만)
+```
+
+**통합 관리자의 DB 권한은 그대로 읽기 전용**이고, 예외는 이 경로 하나뿐이다.
+제대 서무는 전 제대 공지를 내리거나 지울 수 없다(자기 제대 글만 만질 수 있다).
+
+### 화면
+
+- 대시보드 맨 위 공지 영역과 게시판 목록 양쪽에 **모든 제대에서** 보인다
+- 제대 공지와 구분되게 **`전체 공지`** 배지를 다른 색으로 붙인다
+- 통합 관리자 화면에 `전 제대 공지 작성` 버튼을 둔다
+
+### 댓글은 달 수 없게 한다
+
+전 제대 공지에 댓글을 허용하면 문제가 생긴다. 1제대 대원이 단 댓글은 `unit = 1제대`가
+되어 **2·3제대에는 안 보인다.** 같은 글 아래 제대마다 다른 댓글이 달린 것처럼 보인다.
+그렇다고 댓글까지 '전체'로 만들면 **게시판을 제대별로 나눈 취지가 깨진다**(1제대 대원이
+쓴 글을 3제대가 보게 된다).
+
+그래서 **전 제대 공지에는 댓글 입력칸을 두지 않는다.** 위에서 내려오는 알림이지 토론
+게시물이 아니다. 필요하면 각 제대 게시판에서 따로 이야기하면 된다.
+
+---
+
 ## 코드 변경 목록
 
 ### 반드시 고쳐야 하는 것
@@ -295,7 +351,9 @@ GRANT  UPDATE (content, updated_at) ON board_comments TO authenticated;
 | `app/dashboard/page.tsx` | `super`면 상단에 **제대 전환 드롭다운**, 고른 제대를 아래로 전달 |
 | `LeaveCalendar` · `BoardPosts` · `NoticeBanner` · `DateComments` | `viewUnit`을 받으면 그 제대로 걸러 조회 (일반 사용자는 RLS가 알아서 하므로 안 넘기면 됨) |
 | 신청 폼 · 취소 · 순번 · 공지 버튼 | `super`에게는 **감추기** (읽기 전용) |
-| `app/admin/page.tsx` | `super` 접근 차단 (관리 기능이 없으므로) |
+| `app/api/admin/global-notice/route.ts` | **신규.** 전 제대 공지 작성·수정·삭제 (`super` 전용) |
+| `BoardPosts` · `NoticeBanner` | `전체 공지` 배지 표시, 전 제대 공지에는 **댓글칸 감추기** |
+| `app/admin/page.tsx` | `super`에게는 관리 탭 대신 **전 제대 공지 작성** 화면만 |
 
 ### 안 고쳐도 되는 것
 
@@ -323,8 +381,15 @@ GRANT  UPDATE (content, updated_at) ON board_comments TO authenticated;
 | 9 | **통합 관리자**가 신청·취소·삭제·공지·정원 변경 시도 | **전부 거부** |
 | 10 | 같은 `홍길동 경사`가 1제대와 2제대에 각각 있을 때 로그인 | 각자 정상 로그인 |
 | 11 | 신규 신청·글 작성 시 제대가 자동으로 채워지는지 | 작성자 제대와 일치 |
-| 12 | 앱이 제대를 조작해 보내도 무시되는지 | 트리거가 덮어씀 |
-| 13 | 기존 2제대 데이터가 그대로인지 | 26명·기록 유지 |
+| 12 | 대원이 `unit`을 **직접 지정해** 다른 제대에 글·신청을 꽂으려 시도 | **거부** (저장 규칙) |
+| 13 | 대원이 `unit = '전체'`로 글을 만들려 시도 | **거부** |
+| 14 | 통합 관리자가 쓴 **전 제대 공지**가 세 제대 모두에 보이는지 | 전부 보임 |
+| 15 | 제대 서무가 전 제대 공지를 수정·삭제 시도 | 거부 |
+| 16 | 기존 2제대 데이터가 그대로인지 | 26명·기록 유지 |
+
+12·13번이 이번에 추가된 항목이다. 트리거는 값이 **비어 있을 때만** 채우므로,
+앱이 제대를 직접 적어 보내면 트리거를 지나친다. 막는 것은 저장 규칙의
+`unit = my_unit()` 조건이고, 그게 실제로 동작하는지 확인하는 검사다.
 
 10번이 중요하다 — **제대를 합치면 동명이인이 생길 수 있고**, 지금 구조는 이름+계급이
 겹치면 로그인을 막는다.
@@ -360,11 +425,10 @@ GRANT  UPDATE (content, updated_at) ON board_comments TO authenticated;
   실패한다. 정상 흐름에서는 생기지 않는다.
 
 **결정 보류**
-- **전 제대 공지가 필요한가?** 지금 계획은 공지도 제대별이다. 기동대 전체 공지가
-  필요하면 `board_posts.unit`을 비워 "전체 공지"로 쓰는 방법이 있고, 그때 규칙을 한 줄
-  더한다.
 - **통합 관리자가 볼 화면.** 지금 계획은 제대를 하나씩 전환해 보는 방식이다.
   세 제대를 한 화면에 겹쳐 보는 요구가 생기면 달력 표시를 따로 설계해야 한다.
+- **전 제대 공지에 댓글을 허용할지.** 지금 계획은 막아둔다(위 "전 제대 공지" 참고).
+  허용하려면 게시판을 제대별로 나눈 원칙과 충돌하므로 그때 다시 정한다.
 - 대원이 제대를 옮길 때의 절차 — 서무가 제대만 바꾸면 되지만, 지난 기록은 예전 제대에
   남는다는 점을 안내에 넣을지.
 
