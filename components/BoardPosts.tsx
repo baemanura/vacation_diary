@@ -189,11 +189,23 @@ export default function BoardPosts({
   // 공지로 올려도 글쓴이는 그대로이고, 목록 맨 위로만 옮겨간다.
   const handleToggleNotice = async (post: Post) => {
     try {
-      const { error } = await supabase
+      // .select()로 실제로 바뀐 행을 받아본다. 권한이 없으면 Supabase는 오류가 아니라
+      // "0건 수정"을 성공으로 돌려주기 때문에, 이걸 확인하지 않으면 눌러도 아무 일도
+      // 일어나지 않는 상태를 화면에서 알아챌 방법이 없다.
+      const { data, error } = await supabase
         .from('board_posts')
         .update({ is_notice: !post.is_notice })
-        .eq('id', post.id);
+        .eq('id', post.id)
+        .select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        alert(
+          '공지를 변경하지 못했습니다.\n\n' +
+            '서무 계정으로 로그인했는데도 계속 안 된다면, 게시판 수정 권한(RLS 정책)이 ' +
+            '설정되지 않은 것입니다. 이 화면을 관리자에게 알려주세요.'
+        );
+        return;
+      }
       await loadPosts();
     } catch (error) {
       alert(describeUnexpectedError(error, post.is_notice ? '공지 내리기' : '공지 등록'));
