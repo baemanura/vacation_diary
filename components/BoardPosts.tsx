@@ -544,7 +544,11 @@ export default function BoardPosts({
                         onChange={(e) =>
                           setNewComments({ ...newComments, [post.id]: e.target.value })
                         }
-                        onKeyPress={(e) => {
+                        onKeyDown={(e) => {
+                          // 한글은 글자를 조합하는 중에도 엔터가 올라온다. 그 엔터까지
+                          // 전송으로 받으면 "안녕하세"처럼 조합이 덜 끝난 채로 등록된다.
+                          // isComposing으로 조합 중인 엔터를 걸러낸다.
+                          if (e.nativeEvent.isComposing) return;
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
                             handleCommentSubmit(post.id);

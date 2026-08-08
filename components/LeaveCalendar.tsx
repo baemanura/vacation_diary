@@ -57,6 +57,10 @@ export default function LeaveCalendar({
   const [quotaSettings, setQuotaSettings] = useState<QuotaSetting[]>([]);
   const [priorities, setPriorities] = useState<Map<string, number>>(new Map());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // 서무가 남의 신청을 취소할 때 사유를 받는 입력칸. 한 번에 하나만 열어둔다.
+  const [cancelTarget, setCancelTarget] = useState<{ leaveId: string; date: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -151,26 +155,31 @@ export default function LeaveCalendar({
   // 본인이 취소하면 사유 없이, 서무가 본인 것이 아닌 신청을 취소하면 사유를 받아 기록한다.
   // 여러 날에 걸친 신청 중 하루만 취소하는 경우, 그 하루만 취소 처리하고
   // 나머지 앞/뒤 구간은 별도의 유효한 신청으로 남긴다.
-  const handleCancel = async (leave: LeaveRequest, dateToCancel: string) => {
-    const isSelf = leave.member_id === currentUserId;
-    const isPartial = leave.start_date !== leave.end_date;
-    const scopeNote = isPartial
+  const cancelScopeNote = (leave: LeaveRequest, dateToCancel: string) =>
+    leave.start_date !== leave.end_date
       ? ` (${leave.start_date} ~ ${leave.end_date} 중 ${dateToCancel}만 취소되고 나머지는 유지됩니다)`
       : '';
-    let reason: string | null = null;
 
-    if (isSelf) {
-      if (!confirm(`정말 취소하시겠습니까?${scopeNote}`)) return;
-    } else {
-      const input = prompt(`취소 사유를 입력해주세요.${scopeNote}`);
-      if (input === null) return;
-      if (!input.trim()) {
-        alert('취소 사유를 입력해야 합니다.');
-        return;
-      }
-      reason = input.trim();
+  // 본인 신청은 확인만 받고 바로 취소하고, 남의 신청을 서무가 취소할 때는 사유를 받는다.
+  //
+  // 사유를 prompt()로 받았더니 카카오톡 같은 인앱 브라우저가 그 창을 막는 경우가 있었다.
+  // 막히면 null이 돌아와 취소가 조용히 중단되고, 서무 눈에는 버튼이 안 먹는 것처럼 보인다.
+  // 그래서 사유는 화면 안의 입력칸으로 받는다.
+  const requestCancel = (leave: LeaveRequest, dateToCancel: string) => {
+    if (leave.member_id === currentUserId) {
+      if (!confirm(`정말 취소하시겠습니까?${cancelScopeNote(leave, dateToCancel)}`)) return;
+      void handleCancel(leave, dateToCancel, null);
+      return;
     }
+    setCancelReason('');
+    setCancelTarget({ leaveId: leave.id, date: dateToCancel });
+  };
 
+  const handleCancel = async (
+    leave: LeaveRequest,
+    dateToCancel: string,
+    reason: string | null
+  ) => {
     // 겹치는 활성 신청을 막는 DB 제약조건 때문에, 남는 구간을 먼저 등록하면 아직
     // 원래 범위 그대로인 row와 겹쳐서 실패한다. 그래서 원래 row를 취소되는 하루로
     // 먼저 축소한 다음 남는 구간을 등록하고, 등록이 실패하면 원래 상태로 되돌린다.
@@ -183,7 +192,7 @@ export default function LeaveCalendar({
     }
 
     try {
-      const { error: updateError } = await supabase
+      const { data: cancelledRows, error: updateError } = await supabase
         .from('leave_requests')
         .update({
           start_date: dateToCancel,
@@ -192,8 +201,15 @@ export default function LeaveCalendar({
           cancelled_at: new Date().toISOString(),
           cancel_reason: reason,
         })
-        .eq('id', leave.id);
+        .eq('id', leave.id)
+        .select();
       if (updateError) throw updateError;
+      // 권한이 없으면 오류 없이 0건이 돌아온다. 성공으로 넘기면 취소되지 않았는데도
+      // 취소된 것처럼 보인다.
+      if (!cancelledRows || cancelledRows.length === 0) {
+        alert('취소하지 못했습니다. 본인 신청이거나 서무만 취소할 수 있습니다.');
+        return;
+      }
 
       if (segments.length > 0) {
         const { error: insertError } = await supabase.from('leave_requests').insert(
@@ -223,10 +239,13 @@ export default function LeaveCalendar({
         }
       }
 
+      setCancelTarget(null);
       await loadData();
     } catch (error) {
       alert(describeUnexpectedError(error, '취소'));
       console.error(error);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -551,7 +570,7 @@ export default function LeaveCalendar({
                         </span>
                         {canCancel && (
                           <button
-                            onClick={() => handleCancel(leave, selectedDate)}
+                            onClick={() => requestCancel(leave, selectedDate)}
                             className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
                             title="취소"
                           >
@@ -575,6 +594,53 @@ export default function LeaveCalendar({
                     {cancelled && leave.cancel_reason && (
                       <div className="text-xs text-red-600 mt-0.5">
                         취소 사유: {leave.cancel_reason}
+                      </div>
+                    )}
+
+                    {cancelTarget?.leaveId === leave.id && cancelTarget.date === selectedDate && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          취소 사유를 입력해주세요
+                          <span className="font-normal text-gray-500">
+                            {cancelScopeNote(leave, selectedDate)}
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.nativeEvent.isComposing) return;
+                            if (e.key === 'Enter' && cancelReason.trim() && !cancelling) {
+                              e.preventDefault();
+                              setCancelling(true);
+                              void handleCancel(leave, selectedDate, cancelReason.trim());
+                            }
+                          }}
+                          placeholder="예: 근무 일정 변경"
+                          autoFocus
+                          disabled={cancelling}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        />
+                        <div className="mt-2 flex justify-end gap-2">
+                          <button
+                            onClick={() => setCancelTarget(null)}
+                            disabled={cancelling}
+                            className="px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+                          >
+                            그만두기
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCancelling(true);
+                              void handleCancel(leave, selectedDate, cancelReason.trim());
+                            }}
+                            disabled={cancelling || !cancelReason.trim()}
+                            className="px-3 py-1 text-xs rounded bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white font-semibold transition"
+                          >
+                            {cancelling ? '취소 중...' : '취소하기'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
