@@ -45,6 +45,8 @@ export function getQuotaStatus(current: number, base: number, max: number) {
 export interface QuotaSetting {
   id: string;
   effective_from: string;
+  /** 비어 있으면 다음 설정이 시작하기 전까지 계속 적용된다. */
+  effective_to: string | null;
   dispatch_rate: string;
   base_quota: number;
   max_quota: number;
@@ -52,10 +54,12 @@ export interface QuotaSetting {
 }
 
 // 날짜(date)에 실제로 적용되는 정원 설정을 찾는다.
-// effective_from이 date 이전(포함)인 것들 중 가장 최근에 시작된 설정을 사용하고,
-// 시작일이 같으면 가장 최근에 등록된(created_at) 설정을 우선한다.
+// 시작일이 date 이전(포함)이고, 종료일이 없거나 date 이후(포함)인 것들 중
+// 가장 늦게 시작한 설정을 쓴다. 시작일이 같으면 나중에 등록된 것을 우선한다.
 export function getQuotaForDate(settings: QuotaSetting[], date: string): QuotaSetting | null {
-  const candidates = settings.filter((s) => s.effective_from <= date);
+  const candidates = settings.filter(
+    (s) => s.effective_from <= date && (!s.effective_to || date <= s.effective_to)
+  );
   if (candidates.length === 0) return null;
 
   return candidates.reduce((latest, s) => {
@@ -64,6 +68,19 @@ export function getQuotaForDate(settings: QuotaSetting[], date: string): QuotaSe
     }
     return s.created_at > latest.created_at ? s : latest;
   });
+}
+
+/**
+ * 두 설정의 적용 기간이 하루라도 겹치는지 본다.
+ * 겹치면 그 날짜에 어느 설정을 쓸지 모호해지므로 저장 전에 막는다.
+ */
+export function quotaPeriodsOverlap(
+  a: { effective_from: string; effective_to: string | null },
+  b: { effective_from: string; effective_to: string | null }
+) {
+  const aEnd = a.effective_to ?? '9999-12-31';
+  const bEnd = b.effective_to ?? '9999-12-31';
+  return a.effective_from <= bEnd && b.effective_from <= aEnd;
 }
 
 // "오늘"을 로컬 날짜 문자열로 반환한다. new Date().toISOString()로 만들면
@@ -136,14 +153,20 @@ export const SUB_REASON_OPTIONS_BY_TYPE: Record<string, string[]> = {
   휴직: LEAVE_OF_ABSENCE_REASONS,
 };
 
-// 출동율별 가능인원(통상적으로 연가를 보낼 수 있는 인원).
-// 예비인원은 만일을 대비해 별도로 잡아두는 인원으로, 가능인원과 별개로 항상 2명이다.
-export const DISPATCH_RATE_OPTIONS = ['70%', '80%'] as const;
+export const DISPATCH_RATE_OPTIONS = ['70%', '80%', '90%', '100%'] as const;
+
+// 출동율을 고르면 채워지는 가능인원(통상적으로 연가를 보낼 수 있는 인원)의 출발값.
+// 출동율이 10% 오를 때마다 2명씩 줄어드는 기존 기준을 그대로 이었다.
+// 서무가 그 자리에서 고칠 수 있으므로 어디까지나 기본값이다.
 export const BASE_QUOTA_BY_DISPATCH_RATE: Record<string, number> = {
   '70%': 5,
   '80%': 3,
+  '90%': 1,
+  '100%': 0,
 };
-export const RESERVE_QUOTA = 2;
-export function getMaxQuota(baseQuota: number) {
-  return baseQuota + RESERVE_QUOTA;
-}
+
+/** 예비인원(만일을 대비해 남겨두는 인원)의 기본값. 역시 고칠 수 있다. */
+export const DEFAULT_RESERVE_QUOTA = 2;
+
+/** 인원 선택 목록. 0명은 "그 기간에는 연가를 보내지 않는다"는 뜻으로 쓸 수 있다. */
+export const QUOTA_CHOICES = Array.from({ length: 11 }, (_, i) => i);
