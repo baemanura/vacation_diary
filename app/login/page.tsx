@@ -84,10 +84,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
-        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-2 text-gray-800">
-          3기 2제 실시간 연가표
+        <h1 className="text-2xl sm:text-3xl font-bold text-center leading-tight mb-8 text-gray-800">
+          <span className="block">3기 2제</span>
+          <span className="block">실시간 연가표</span>
         </h1>
-        <p className="text-center text-gray-600 mb-8">로그인</p>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -135,7 +135,8 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-gray-600 text-sm mt-6">
-          처음 사용하시나요? 서무에게 아이디와 비밀번호를 받으세요.
+          <span className="block">처음 사용하시나요?</span>
+          <span className="block">서무에게 비밀번호를 받으세요</span>
         </p>
       </div>
     </div>
