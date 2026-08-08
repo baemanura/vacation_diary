@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { formatDateFromTimestamp } from '@/lib/utils';
+import { describeUnexpectedError, formatDateFromTimestamp } from '@/lib/utils';
 import { Edit2, Trash2, KeyRound } from 'lucide-react';
 
 interface Member {
@@ -22,6 +22,7 @@ export default function MemberList() {
   );
   const [saving, setSaving] = useState(false);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMembers();
@@ -160,31 +161,85 @@ export default function MemberList() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (isLastAdmin(id)) {
+  // 무엇이 함께 사라지는지 세어둔다. 되돌릴 수 없는 작업이라 숫자를 보고 결정하게 한다.
+  const countBelongings = async (id: string) => {
+    const ask = async (table: string, column: string) => {
+      const { count } = await supabase
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq(column, id);
+      return count ?? 0;
+    };
+    const [leaves, posts, comments, dateComments] = await Promise.all([
+      ask('leave_requests', 'member_id'),
+      ask('board_posts', 'author_id'),
+      ask('board_comments', 'author_id'),
+      ask('date_comments', 'author_id'),
+    ]);
+    return { leaves, posts, comments, dateComments };
+  };
+
+  const handleDelete = async (member: Member) => {
+    if (isLastAdmin(member.id)) {
       alert('마지막 서무는 삭제할 수 없습니다.\n다른 대원을 먼저 서무로 지정해주세요.');
       return;
     }
 
-    if (
-      !confirm(
-        '정말 이 대원을 삭제하시겠습니까?\n\n' +
-          '이 대원은 더 이상 로그인할 수 없게 되고, 지난 연가 기록은 ' +
-          "'알 수 없음'으로 남습니다."
-      )
-    )
-      return;
-
+    setDeletingId(member.id);
     try {
-      // profiles만 지운다. Supabase 대시보드에서 로그인 계정(auth)까지 지우면
-      // 그 사람의 연가 기록과 게시글이 함께 삭제된다(외래키가 연쇄 삭제로 걸려 있다).
-      // 기록을 남기는 것이 이 기능의 취지이므로 auth 계정은 건드리지 않는다.
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
-      if (error) throw error;
+      const { leaves, posts, comments, dateComments } = await countBelongings(member.id);
+      const lines = [
+        leaves > 0 && `· 연가·병가 기록 ${leaves}건`,
+        posts > 0 && `· 게시글 ${posts}건 (달린 댓글 포함)`,
+        comments > 0 && `· 남의 글에 단 댓글 ${comments}건`,
+        dateComments > 0 && `· 달력 날짜 댓글 ${dateComments}건`,
+      ].filter(Boolean);
+
+      const detail = lines.length
+        ? `함께 삭제되는 기록:\n${lines.join('\n')}\n\n`
+        : '남긴 기록은 없습니다.\n\n';
+
+      if (
+        !confirm(
+          `${member.name} ${member.rank} 대원을 삭제합니다.\n\n` +
+            detail +
+            '삭제하면 되돌릴 수 없습니다. 계속하시겠습니까?'
+        )
+      ) {
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      // 로그인 계정까지 함께 지워야 해서 서버를 거친다.
+      // (브라우저 키로는 로그인 계정을 지울 수 없고, 지우는 순서도 서버에서 맞춘다.)
+      const response = await fetch('/api/admin/delete-member', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ memberId: member.id }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        alert(`삭제하지 못했습니다.\n\n${result.error ?? ''}`.trim());
+        return;
+      }
+
       await loadMembers();
+      alert(`${member.name} ${member.rank} 대원을 삭제했습니다.`);
     } catch (error) {
-      alert('삭제 실패');
+      alert(describeUnexpectedError(error, '대원 삭제'));
       console.error(error);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -307,8 +362,9 @@ export default function MemberList() {
                           <KeyRound size={18} />
                         </button>
                         <button
-                          onClick={() => handleDelete(member.id)}
-                          className="text-red-600 hover:text-red-700 transition"
+                          onClick={() => handleDelete(member)}
+                          disabled={deletingId === member.id}
+                          className="text-red-600 hover:text-red-700 disabled:text-gray-300 transition"
                           title="삭제"
                         >
                           <Trash2 size={18} />
