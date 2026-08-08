@@ -166,10 +166,19 @@ export default function MemberList() {
       return;
     }
 
-    if (!confirm('정말 이 대원을 삭제하시겠습니까?\n(Auth 계정도 함께 삭제해야 합니다)')) return;
+    if (
+      !confirm(
+        '정말 이 대원을 삭제하시겠습니까?\n\n' +
+          '이 대원은 더 이상 로그인할 수 없게 되고, 지난 연가 기록은 ' +
+          "'알 수 없음'으로 남습니다."
+      )
+    )
+      return;
 
     try {
-      // profiles만 삭제 (Auth 계정은 Supabase 대시보드에서 별도 삭제 필요)
+      // profiles만 지운다. Supabase 대시보드에서 로그인 계정(auth)까지 지우면
+      // 그 사람의 연가 기록과 게시글이 함께 삭제된다(외래키가 연쇄 삭제로 걸려 있다).
+      // 기록을 남기는 것이 이 기능의 취지이므로 auth 계정은 건드리지 않는다.
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
       await loadMembers();
