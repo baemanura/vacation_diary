@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { describeUnexpectedError, formatDateTime } from '@/lib/utils';
-import { Send, Trash2, ChevronDown, ChevronUp, Pin, PinOff } from 'lucide-react';
+import { Send, Trash2, ChevronDown, ChevronUp, Pin, PinOff, Pencil } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -18,6 +18,7 @@ interface Comment {
   author_id: string;
   content: string;
   created_at: string;
+  updated_at: string | null;
   profiles?: Profile;
 }
 
@@ -26,6 +27,7 @@ interface Post {
   author_id: string;
   content: string;
   created_at: string;
+  updated_at: string | null;
   is_notice: boolean;
   profiles?: Profile;
   board_comments?: Comment[];
@@ -45,6 +47,12 @@ export default function BoardPosts({
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
   const [submittingComments, setSubmittingComments] = useState<Set<string>>(new Set());
+  // 수정 중인 글·댓글은 한 번에 하나만 열어둔다.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     loadPosts();
@@ -187,29 +195,108 @@ export default function BoardPosts({
 
   // 서무가 이미 올라온 글을 공지로 올리거나 내린다.
   // 공지로 올려도 글쓴이는 그대로이고, 목록 맨 위로만 옮겨간다.
+  // 공지 지정은 브라우저에서 직접 못 바꾸게 막아두고 서버를 거친다.
+  // (이유는 app/api/admin/toggle-notice/route.ts 주석 참고)
   const handleToggleNotice = async (post: Post) => {
+    const action = post.is_notice ? '공지 내리기' : '공지 등록';
     try {
-      // .select()로 실제로 바뀐 행을 받아본다. 권한이 없으면 Supabase는 오류가 아니라
-      // "0건 수정"을 성공으로 돌려주기 때문에, 이걸 확인하지 않으면 눌러도 아무 일도
-      // 일어나지 않는 상태를 화면에서 알아챌 방법이 없다.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      const response = await fetch('/api/admin/toggle-notice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ postId: post.id, isNotice: !post.is_notice }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        alert(`${action}에 실패했습니다.\n\n${result.error ?? ''}`.trim());
+        return;
+      }
+
+      await loadPosts();
+    } catch (error) {
+      alert(describeUnexpectedError(error, action));
+      console.error(error);
+    }
+  };
+
+  // 본인이 쓴 글의 내용만 고친다. 고친 뒤에는 '수정됨'이 붙어서 다른 사람이
+  // 내용이 바뀐 걸 알 수 있게 한다.
+  const handleEditSave = async (post: Post) => {
+    const content = editingContent.trim();
+    if (!content) {
+      alert('내용을 입력해주세요.');
+      return;
+    }
+    if (content === post.content) {
+      setEditingId(null);
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
       const { data, error } = await supabase
         .from('board_posts')
-        .update({ is_notice: !post.is_notice })
+        .update({ content, updated_at: new Date().toISOString() })
         .eq('id', post.id)
         .select();
       if (error) throw error;
+      // 권한이 없으면 오류 없이 0건이 돌아온다. 성공으로 넘기면 안 된다.
       if (!data || data.length === 0) {
-        alert(
-          '공지를 변경하지 못했습니다.\n\n' +
-            '서무 계정으로 로그인했는데도 계속 안 된다면, 게시판 수정 권한(RLS 정책)이 ' +
-            '설정되지 않은 것입니다. 이 화면을 관리자에게 알려주세요.'
-        );
+        alert('수정하지 못했습니다. 본인이 쓴 글만 수정할 수 있습니다.');
         return;
       }
+
+      setEditingId(null);
       await loadPosts();
     } catch (error) {
-      alert(describeUnexpectedError(error, post.is_notice ? '공지 내리기' : '공지 등록'));
+      alert(describeUnexpectedError(error, '수정'));
       console.error(error);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleCommentEditSave = async (comment: Comment) => {
+    const content = editingCommentContent.trim();
+    if (!content) {
+      alert('내용을 입력해주세요.');
+      return;
+    }
+    if (content === comment.content) {
+      setEditingCommentId(null);
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const { data, error } = await supabase
+        .from('board_comments')
+        .update({ content, updated_at: new Date().toISOString() })
+        .eq('id', comment.id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        alert('수정하지 못했습니다. 본인이 쓴 댓글만 수정할 수 있습니다.');
+        return;
+      }
+
+      setEditingCommentId(null);
+      await loadPosts();
+    } catch (error) {
+      alert(describeUnexpectedError(error, '댓글 수정'));
+      console.error(error);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -279,9 +366,28 @@ export default function BoardPosts({
                   <div className="font-semibold text-gray-900">
                     {post.profiles?.name} {post.profiles?.rank}
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">{formatDateTime(post.created_at)}</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {formatDateTime(post.created_at)}
+                    {post.updated_at && (
+                      <span className="ml-1 text-gray-400">
+                        (수정됨 {formatDateTime(post.updated_at)})
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="ml-4 flex items-center gap-1 shrink-0">
+                  {post.author_id === currentUserId && editingId !== post.id && (
+                    <button
+                      onClick={() => {
+                        setEditingId(post.id);
+                        setEditingContent(post.content);
+                      }}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                      title="수정"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       onClick={() => handleToggleNotice(post)}
@@ -306,7 +412,37 @@ export default function BoardPosts({
                   )}
                 </div>
               </div>
-              <div className="mt-3 text-gray-800 whitespace-pre-wrap break-words">{post.content}</div>
+              {editingId === post.id ? (
+                <div className="mt-3">
+                  <textarea
+                    value={editingContent}
+                    onChange={(e) => setEditingContent(e.target.value)}
+                    rows={4}
+                    disabled={savingEdit}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      onClick={() => setEditingId(null)}
+                      disabled={savingEdit}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={() => handleEditSave(post)}
+                      disabled={savingEdit || !editingContent.trim()}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold transition"
+                    >
+                      {savingEdit ? '저장 중...' : '저장'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 text-gray-800 whitespace-pre-wrap break-words">
+                  {post.content}
+                </div>
+              )}
 
               {/* 댓글 토글 버튼 */}
               <button
@@ -332,21 +468,66 @@ export default function BoardPosts({
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {formatDateTime(comment.created_at)}
+                                {comment.updated_at && (
+                                  <span className="ml-1 text-gray-400">(수정됨)</span>
+                                )}
                               </div>
                             </div>
                             {comment.author_id === currentUserId && (
-                              <button
-                                onClick={() => handleCommentDelete(comment.id)}
-                                className="ml-2 p-1 text-gray-400 hover:text-red-600 transition"
-                                title="댓글 삭제"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              <div className="ml-2 flex items-center gap-1 shrink-0">
+                                {editingCommentId !== comment.id && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingCommentId(comment.id);
+                                      setEditingCommentContent(comment.content);
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-blue-600 transition"
+                                    title="댓글 수정"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleCommentDelete(comment.id)}
+                                  className="p-1 text-gray-400 hover:text-red-600 transition"
+                                  title="댓글 삭제"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             )}
                           </div>
-                          <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap break-words">
-                            {comment.content}
-                          </div>
+                          {editingCommentId === comment.id ? (
+                            <div className="mt-2">
+                              <textarea
+                                value={editingCommentContent}
+                                onChange={(e) => setEditingCommentContent(e.target.value)}
+                                rows={2}
+                                disabled={savingEdit}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+                              />
+                              <div className="mt-2 flex justify-end gap-2">
+                                <button
+                                  onClick={() => setEditingCommentId(null)}
+                                  disabled={savingEdit}
+                                  className="px-2.5 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  onClick={() => handleCommentEditSave(comment)}
+                                  disabled={savingEdit || !editingCommentContent.trim()}
+                                  className="px-2.5 py-1 text-xs rounded bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold transition"
+                                >
+                                  {savingEdit ? '저장 중...' : '저장'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap break-words">
+                              {comment.content}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

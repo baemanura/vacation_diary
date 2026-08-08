@@ -170,6 +170,10 @@ export default function AdminGuide() {
               되므로, 꼭 읽어야 하는 내용에만 쓰는 것이 좋습니다. 댓글은 아래 자유게시판의 원래
               글에서 달 수 있습니다.
             </p>
+            <p className="mt-2">
+              대원은 <B>본인이 쓴 글과 댓글의 내용만</B> 고칠 수 있고(고치면 <Code>수정됨</Code>이
+              붙습니다), 공지로 올리는 것은 <B>서무만</B> 할 수 있습니다.
+            </p>
           </Section>
 
           <Section title="신청 유형과 연가 구분">
