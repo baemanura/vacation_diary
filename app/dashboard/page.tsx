@@ -169,7 +169,7 @@ export default function DashboardPage() {
           <LeaveRequestForm currentUserId={user?.id} onSuccess={handleFormSuccess} />
 
           {/* 자유게시판 */}
-          <BoardPosts currentUserId={user?.id} />
+          <BoardPosts currentUserId={user?.id} isAdmin={profile?.role === 'admin'} />
         </div>
       </main>
     </div>

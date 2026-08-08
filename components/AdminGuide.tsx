@@ -155,6 +155,18 @@ export default function AdminGuide() {
             </ul>
           </Section>
 
+          <Section title="게시글을 공지로 올리기">
+            <p>
+              자유게시판의 글 오른쪽 위 <Badge className="bg-amber-100 text-amber-700">📌 압정</Badge>{' '}
+              버튼을 누르면 그 글이 <B>공지</B>가 되어 목록 맨 위에 노란색으로 고정됩니다. 이
+              버튼은 서무에게만 보입니다.
+            </p>
+            <p className="mt-2">
+              누른 사람이 아니라 <B>원래 글쓴이가 그대로 유지</B>되고, 내용도 바뀌지 않습니다. 다시
+              누르면 공지가 내려갑니다. 공지는 여러 개 올릴 수 있습니다.
+            </p>
+          </Section>
+
           <Section title="신청 유형과 연가 구분">
             <p>
               신청 유형은 <B>연가 · 병가 · 공가 · 특가 · 교육 · 출장 · 휴직</B> 입니다.
