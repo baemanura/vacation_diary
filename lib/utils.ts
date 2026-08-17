@@ -195,6 +195,17 @@ export function occupiesQuota(leave: { type: string; absence_length?: string | n
 }
 
 export const LEAVE_TYPES = ['연가', '병가', '공가', '특가', '교육', '출장', '휴직'];
+
+/** 유형별 배지 색. 달력의 내 신청 내역과 관리 페이지의 사용 현황이 같은 색을 쓴다. */
+export const TYPE_BADGE_COLOR: Record<string, string> = {
+  연가: 'bg-green-100 text-green-700',
+  병가: 'bg-blue-100 text-blue-700',
+  공가: 'bg-purple-100 text-purple-700',
+  특가: 'bg-teal-100 text-teal-700',
+  교육: 'bg-amber-100 text-amber-700',
+  출장: 'bg-orange-100 text-orange-700',
+  휴직: 'bg-pink-100 text-pink-700',
+};
 // 연가는 하루를 다 쓰는지(일반), 반일만 쓰는지(오전/오후)만 고른다.
 // 여행·결혼식 같은 구체적인 사정은 목록으로 못 다 담고 사생활이기도 해서,
 // 필요한 사람만 신청 화면의 '추가 사항'에 직접 적도록 안내한다.

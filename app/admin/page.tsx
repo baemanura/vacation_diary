@@ -8,6 +8,7 @@ import { needsPasswordChange } from '@/lib/utils';
 import QuotaSettingsManager from '@/components/QuotaSettingsManager';
 import AccountManager from '@/components/AccountManager';
 import MemberList from '@/components/MemberList';
+import MemberUsageSummary from '@/components/MemberUsageSummary';
 import AdminGuide from '@/components/AdminGuide';
 
 // 백엔드가 응답하지 않을 때 무한정 "로딩 중..."에 머물지 않도록 하는 상한.
@@ -19,7 +20,7 @@ export default function AdminPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'quota' | 'account' | 'members'>('quota');
+  const [activeTab, setActiveTab] = useState<'quota' | 'account' | 'members' | 'usage'>('quota');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -118,10 +119,11 @@ export default function AdminPage() {
       {/* 탭 네비게이션 */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-8">
+          {/* 탭이 넷이라 좁은 화면에서는 가로로 넘친다. 줄바꿈 대신 가로 스크롤로 둔다. */}
+          <div className="flex gap-6 sm:gap-8 overflow-x-auto">
             <button
               onClick={() => setActiveTab('quota')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'quota'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -131,7 +133,7 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setActiveTab('account')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'account'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -141,13 +143,23 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setActiveTab('members')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'members'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
               대원 목록
+            </button>
+            <button
+              onClick={() => setActiveTab('usage')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                activeTab === 'usage'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              사용 현황
             </button>
           </div>
         </div>
@@ -161,6 +173,7 @@ export default function AdminPage() {
         {activeTab === 'quota' && <QuotaSettingsManager currentUserId={user?.id} />}
         {activeTab === 'account' && <AccountManager />}
         {activeTab === 'members' && <MemberList />}
+        {activeTab === 'usage' && <MemberUsageSummary />}
       </main>
     </div>
   );

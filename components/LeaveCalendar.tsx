@@ -12,6 +12,7 @@ import {
   describeUnexpectedError,
   getTodayString,
   occupiesQuota,
+  TYPE_BADGE_COLOR,
   type QuotaSetting,
 } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
@@ -729,156 +730,144 @@ export default function LeaveCalendar({
         </div>
       )}
 
-      {/* 대원별 이달 사용일수 */}
-      <MonthlyMemberSummary
-        leaves={activeLeaves}
-        profiles={profiles}
+      {/* 이 달의 내 신청 내역 (취소한 것도 함께 보여주므로 activeLeaves가 아니라 leaves) */}
+      <MyMonthlyRequests
+        leaves={leaves}
         firstDay={monthFirstDay}
         lastDay={monthLastDay}
+        monthName={monthName}
         currentUserId={currentUserId}
       />
     </div>
   );
 }
 
-interface MemberMonthUsage {
-  memberId: string;
-  name: string;
-  rank: string;
-  byType: [string, number][];
-  totalDays: number;
-}
-
-function SummaryRow({
-  row,
-  rankLabel,
-  mine,
-}: {
-  row: MemberMonthUsage;
-  rankLabel: string;
-  mine: boolean;
-}) {
-  return (
-    <div
-      className={`flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${
-        mine ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'
-      }`}
-    >
-      <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{rankLabel}</span>
-      <span className="font-medium text-gray-900">
-        {row.name} {row.rank}
-      </span>
-      {mine && (
-        <span className="text-xs font-semibold text-blue-700 px-1.5 py-0.5 rounded-full bg-blue-100">
-          나
-        </span>
-      )}
-      {row.byType.map(([type, days]) => (
-        <span
-          key={type}
-          className={`text-xs px-1.5 py-0.5 rounded-full ${
-            TYPE_BADGE_COLOR[type] ?? 'bg-gray-100 text-gray-700'
-          }`}
-        >
-          {type} {days}일
-        </span>
-      ))}
-      <span className="ml-auto text-xs text-gray-500">합계 {row.totalDays}일</span>
-    </div>
-  );
-}
-
-const TYPE_BADGE_COLOR: Record<string, string> = {
-  연가: 'bg-green-100 text-green-700',
-  병가: 'bg-blue-100 text-blue-700',
-  공가: 'bg-purple-100 text-purple-700',
-  특가: 'bg-teal-100 text-teal-700',
-  교육: 'bg-amber-100 text-amber-700',
-  출장: 'bg-orange-100 text-orange-700',
-  휴직: 'bg-pink-100 text-pink-700',
-};
-
-function MonthlyMemberSummary({
+/**
+ * 지금 보고 있는 달에 걸친 내 신청을 건별로 보여준다.
+ *
+ * 달력만으로는 본인이 언제 무엇을 냈는지 알려면 날짜를 하나씩 눌러봐야 한다.
+ * 취소한 건도 함께 보여준다 — 서무가 취소한 경우 그 사유를 여기서 바로 확인할 수 있다.
+ * 달력이 이미 이 달의 신청을 모두 들고 있으므로 따로 조회하지 않는다.
+ */
+function MyMonthlyRequests({
   leaves,
-  profiles,
   firstDay,
   lastDay,
+  monthName,
   currentUserId,
 }: {
   leaves: LeaveRequest[];
-  profiles: Map<string, Profile>;
   firstDay: string;
   lastDay: string;
+  monthName: string;
   currentUserId?: string;
 }) {
-  // member별로 유형별 사용일수를 집계한다.
-  const counts = new Map<string, Map<string, number>>();
+  if (!currentUserId) return null;
 
-  leaves.forEach((leave) => {
-    if (!leave.member_id) return;
+  const mine = leaves
+    .filter((leave) => leave.member_id === currentUserId)
+    .sort(
+      (a, b) =>
+        a.start_date.localeCompare(b.start_date) || a.created_at.localeCompare(b.created_at)
+    );
 
-    // 이번 달 범위로 잘라낸 실제 사용일수만 집계한다.
-    const clippedStart = leave.start_date > firstDay ? leave.start_date : firstDay;
-    const clippedEnd = leave.end_date < lastDay ? leave.end_date : lastDay;
-    if (clippedStart > clippedEnd) return;
-    const days = daysBetweenInclusive(clippedStart, clippedEnd);
+  // 이번 달에 걸친 날만 센다. 달을 걸친 신청은 이번 달 몫만 합계에 들어간다.
+  const daysThisMonth = (leave: LeaveRequest) => {
+    const start = leave.start_date > firstDay ? leave.start_date : firstDay;
+    const end = leave.end_date < lastDay ? leave.end_date : lastDay;
+    return start > end ? 0 : daysBetweenInclusive(start, end);
+  };
 
-    const memberCounts = counts.get(leave.member_id) || new Map<string, number>();
-    memberCounts.set(leave.type, (memberCounts.get(leave.type) ?? 0) + days);
-    counts.set(leave.member_id, memberCounts);
-  });
-
-  const toRow = (memberId: string, byType: Map<string, number>): MemberMonthUsage => ({
-    memberId,
-    name: profiles.get(memberId)?.name ?? '알 수 없음',
-    rank: profiles.get(memberId)?.rank ?? '',
-    byType: Array.from(byType.entries()),
-    totalDays: Array.from(byType.values()).reduce((sum, d) => sum + d, 0),
-  });
-
-  // 휴직자는 순위에서 제외한다. 한 달 내내 잡혀 있어 매번 1위가 되어버려서다.
-  const ranked = Array.from(counts.entries())
-    .filter(([, byType]) => !byType.has('휴직'))
-    .map(([memberId, byType]) => toRow(memberId, byType))
-    .sort((a, b) => b.totalDays - a.totalDays || a.name.localeCompare(b.name, 'ko'));
-
-  const top = ranked.slice(0, 5);
-
-  // 상위 5명에 들지 못하면 본인 사용일수를 확인할 곳이 어디에도 없다. 날짜를 하나씩
-  // 눌러가며 세는 수밖에 없으므로, 순위 밖이면 본인 몫을 따로 붙여준다.
-  // (휴직은 순위에서 빠지지만 본인 기록으로는 보여야 해서 원본에서 다시 찾는다.)
-  const myRank = currentUserId ? ranked.findIndex((m) => m.memberId === currentUserId) : -1;
-  const myCounts = currentUserId ? counts.get(currentUserId) : undefined;
-  const myRow = currentUserId && myCounts ? toRow(currentUserId, myCounts) : null;
-  // 상위 5명 안에 그려지지 않는 경우(순위 밖이거나, 순위 자체에 없는 경우)에만 따로 붙인다.
-  const showMineSeparately = Boolean(currentUserId) && (myRank < 0 || myRank >= top.length);
+  const totalDays = mine
+    .filter((leave) => leave.status === 'active')
+    .reduce((sum, leave) => sum + daysThisMonth(leave), 0);
 
   return (
     <div className="mt-6 pt-6 border-t border-gray-200">
-      <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수 (상위 5명)</h3>
-      {top.length === 0 && !myRow ? (
-        <p className="text-gray-500 text-sm">이번 달 사용 내역이 없습니다.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {top.map((m, index) => (
-            <SummaryRow
-              key={m.memberId}
-              row={m}
-              rankLabel={`${index + 1}위`}
-              mine={m.memberId === currentUserId}
-            />
-          ))}
+      <div className="flex items-baseline justify-between gap-2 mb-3">
+        <h3 className="font-semibold text-gray-900">내 신청 내역</h3>
+        <span className="text-sm text-gray-500">{monthName}</span>
+      </div>
 
-          {showMineSeparately &&
-            (myRow ? (
-              <SummaryRow row={myRow} rankLabel={myRank >= 0 ? `${myRank + 1}위` : '—'} mine />
-            ) : (
-              <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-300 text-sm text-gray-600">
-                이번 달 내 사용 내역이 없습니다.
-              </div>
-            ))}
-        </div>
+      {mine.length === 0 ? (
+        <p className="text-gray-500 text-sm">이번 달 신청 내역이 없습니다.</p>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            {mine.map((leave) => {
+              const cancelled = leave.status !== 'active';
+              const wholeDays = daysBetweenInclusive(leave.start_date, leave.end_date);
+              // 달을 걸친 신청은 전체 일수와 이번 달 몫이 달라서 둘 다 적어준다.
+              const partial = leave.start_date < firstDay || leave.end_date > lastDay;
+
+              return (
+                <div
+                  key={leave.id}
+                  className={`px-3 py-2 rounded-lg border text-sm ${
+                    cancelled
+                      ? 'bg-gray-50 border-gray-200 opacity-70'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span
+                      className={`font-medium tabular-nums ${
+                        cancelled ? 'text-gray-500 line-through' : 'text-gray-900'
+                      }`}
+                    >
+                      {leave.start_date.slice(5)}
+                      {leave.start_date !== leave.end_date && ` ~ ${leave.end_date.slice(5)}`}
+                    </span>
+
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded-full ${
+                        TYPE_BADGE_COLOR[leave.type] ?? 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {leave.type}
+                    </span>
+
+                    {leave.sub_reason && (
+                      <span className="text-xs text-gray-600">{leave.sub_reason}</span>
+                    )}
+                    {leave.absence_length && (
+                      <span className="text-xs text-gray-600">{leave.absence_length}</span>
+                    )}
+
+                    <span className="text-xs text-gray-500">
+                      {wholeDays}일{partial && ` (이번 달 ${daysThisMonth(leave)}일)`}
+                    </span>
+
+                    <span
+                      className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
+                        cancelled ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                      }`}
+                    >
+                      {cancelled ? '취소됨' : '신청중'}
+                    </span>
+                  </div>
+
+                  {/* 서무가 취소한 경우 그 사유를 여기서 바로 볼 수 있게 한다. */}
+                  {cancelled && leave.cancel_reason && (
+                    <div className="mt-1 text-xs text-red-600">
+                      취소 사유: {leave.cancel_reason}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 text-sm text-gray-700">
+            이번 달 합계 <strong className="font-semibold">{totalDays}일</strong>{' '}
+            <span className="text-gray-400">(취소 제외)</span>
+          </div>
+        </>
       )}
+
+      <p className="mt-2 text-xs text-gray-400">
+        달력 위 ◀ ▶ 로 달을 넘기면 그 달의 내역이 보입니다.
+      </p>
     </div>
   );
 }
