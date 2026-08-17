@@ -179,6 +179,43 @@ export default function LeaveCalendar({
     setCancelTarget({ leaveId: leave.id, date: dateToCancel });
   };
 
+  // 순번은 서무만 손댈 수 있게 막혀 있어서 브라우저에서 지우면 조용히 실패한다.
+  // 서버가 "본인이거나 서무"인지 확인한 뒤 지운다.
+  //
+  // 취소 자체는 이미 끝난 뒤에 부르는 것이라, 여기서 실패해도 취소를 되돌리지는 않는다.
+  // 다만 순번이 남은 채로 넘어가면 나중에 순서가 뒤집히므로 조용히 넘기지 않고 알린다.
+  const clearPriority = async (date: string, memberId: string) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) return;
+
+      const response = await fetch('/api/leave/clear-priority', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ date, memberId }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        alert(
+          '취소는 완료됐지만 순번이 지워지지 않았습니다.\n' +
+            '이대로 다시 신청하면 예전 순위가 그대로 살아나므로 서무에게 알려주세요.\n' +
+            `${result.error ?? ''}`.trim()
+        );
+      }
+    } catch (error) {
+      console.error('순번 삭제 실패:', error);
+      alert(
+        '취소는 완료됐지만 순번이 지워지지 않았습니다.\n' +
+          '이대로 다시 신청하면 예전 순위가 그대로 살아나므로 서무에게 알려주세요.'
+      );
+    }
+  };
+
   const handleCancel = async (
     leave: LeaveRequest,
     dateToCancel: string,
@@ -241,6 +278,13 @@ export default function LeaveCalendar({
             .eq('id', leave.id);
           throw insertError;
         }
+      }
+
+      // 취소가 확정된 뒤에 그 날짜의 순번을 지운다. 남겨두면 같은 날짜로 다시
+      // 신청했을 때 예전 순위가 되살아나 먼저 신청한 사람보다 앞에 서게 된다.
+      // (앞뒤 구간 등록이 실패해 되돌린 경우에는 여기까지 오지 않는다.)
+      if (leave.member_id) {
+        await clearPriority(dateToCancel, leave.member_id);
       }
 
       setCancelTarget(null);
@@ -675,6 +719,53 @@ export default function LeaveCalendar({
   );
 }
 
+interface MemberMonthUsage {
+  memberId: string;
+  name: string;
+  rank: string;
+  byType: [string, number][];
+  totalDays: number;
+}
+
+function SummaryRow({
+  row,
+  rankLabel,
+  mine,
+}: {
+  row: MemberMonthUsage;
+  rankLabel: string;
+  mine: boolean;
+}) {
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${
+        mine ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'
+      }`}
+    >
+      <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{rankLabel}</span>
+      <span className="font-medium text-gray-900">
+        {row.name} {row.rank}
+      </span>
+      {mine && (
+        <span className="text-xs font-semibold text-blue-700 px-1.5 py-0.5 rounded-full bg-blue-100">
+          나
+        </span>
+      )}
+      {row.byType.map(([type, days]) => (
+        <span
+          key={type}
+          className={`text-xs px-1.5 py-0.5 rounded-full ${
+            TYPE_BADGE_COLOR[type] ?? 'bg-gray-100 text-gray-700'
+          }`}
+        >
+          {type} {days}일
+        </span>
+      ))}
+      <span className="ml-auto text-xs text-gray-500">합계 {row.totalDays}일</span>
+    </div>
+  );
+}
+
 const TYPE_BADGE_COLOR: Record<string, string> = {
   연가: 'bg-green-100 text-green-700',
   병가: 'bg-blue-100 text-blue-700',
@@ -715,7 +806,7 @@ function MonthlyMemberSummary({
     counts.set(leave.member_id, memberCounts);
   });
 
-  const toRow = (memberId: string, byType: Map<string, number>) => ({
+  const toRow = (memberId: string, byType: Map<string, number>): MemberMonthUsage => ({
     memberId,
     name: profiles.get(memberId)?.name ?? '알 수 없음',
     rank: profiles.get(memberId)?.rank ?? '',
@@ -740,43 +831,6 @@ function MonthlyMemberSummary({
   // 상위 5명 안에 그려지지 않는 경우(순위 밖이거나, 순위 자체에 없는 경우)에만 따로 붙인다.
   const showMineSeparately = Boolean(currentUserId) && (myRank < 0 || myRank >= top.length);
 
-  const Row = ({
-    row,
-    rankLabel,
-    mine,
-  }: {
-    row: ReturnType<typeof toRow>;
-    rankLabel: string;
-    mine: boolean;
-  }) => (
-    <div
-      className={`flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${
-        mine ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'
-      }`}
-    >
-      <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{rankLabel}</span>
-      <span className="font-medium text-gray-900">
-        {row.name} {row.rank}
-      </span>
-      {mine && (
-        <span className="text-xs font-semibold text-blue-700 px-1.5 py-0.5 rounded-full bg-blue-100">
-          나
-        </span>
-      )}
-      {row.byType.map(([type, days]) => (
-        <span
-          key={type}
-          className={`text-xs px-1.5 py-0.5 rounded-full ${
-            TYPE_BADGE_COLOR[type] ?? 'bg-gray-100 text-gray-700'
-          }`}
-        >
-          {type} {days}일
-        </span>
-      ))}
-      <span className="ml-auto text-xs text-gray-500">합계 {row.totalDays}일</span>
-    </div>
-  );
-
   return (
     <div className="mt-6 pt-6 border-t border-gray-200">
       <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수 (상위 5명)</h3>
@@ -785,7 +839,7 @@ function MonthlyMemberSummary({
       ) : (
         <div className="space-y-1.5">
           {top.map((m, index) => (
-            <Row
+            <SummaryRow
               key={m.memberId}
               row={m}
               rankLabel={`${index + 1}위`}
@@ -795,7 +849,7 @@ function MonthlyMemberSummary({
 
           {showMineSeparately &&
             (myRow ? (
-              <Row row={myRow} rankLabel={myRank >= 0 ? `${myRank + 1}위` : '—'} mine />
+              <SummaryRow row={myRow} rankLabel={myRank >= 0 ? `${myRank + 1}위` : '—'} mine />
             ) : (
               <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-300 text-sm text-gray-600">
                 이번 달 내 사용 내역이 없습니다.
