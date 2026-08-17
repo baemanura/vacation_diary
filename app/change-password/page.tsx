@@ -109,16 +109,24 @@ export default function ChangePasswordPage() {
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <h1 className="text-xl font-bold text-gray-900 mb-2">비밀번호 변경</h1>
 
-        {forced ? (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg px-4 py-3 mb-6">
+        {forced && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg px-4 py-3 mb-4">
             처음 받은 임시 비밀번호를 쓰고 있습니다. 본인만 아는 비밀번호로 바꿔야
             연가표를 이용할 수 있습니다.
           </div>
-        ) : (
-          <p className="text-gray-600 text-sm mb-6">
-            영문과 숫자를 포함해 8자 이상으로 정해주세요.
-          </p>
         )}
+
+        {/* 규칙은 강제 변경일 때도 반드시 보여야 한다. 처음 로그인하는 대원이 전부
+            이 화면을 거치는데, 규칙을 숨겨두면 저장을 눌러본 뒤에야 무엇이 잘못됐는지
+            알게 된다. */}
+        <div className="text-gray-600 text-sm mb-6">
+          <p>새 비밀번호는 아래 조건을 모두 만족해야 합니다.</p>
+          <ul className="mt-1 space-y-0.5 list-disc list-inside">
+            <li>8자 이상</li>
+            <li>영문과 숫자를 모두 포함 (공백 없이)</li>
+            <li>임시 비밀번호와 다른 값</li>
+          </ul>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -180,8 +188,22 @@ export default function ChangePasswordPage() {
             {submitting ? '변경 중...' : '비밀번호 변경'}
           </button>
 
-          {/* 강제 변경 중에는 빠져나갈 길을 주지 않는다. */}
-          {!forced && (
+          {/* 강제 변경 중에는 연가표로 빠져나갈 길을 주지 않는다. 다만 계정을 잘못
+              입력해 들어온 경우까지 갇히면 브라우저 데이터를 지우는 수밖에 없으므로
+              로그아웃만은 열어둔다. */}
+          {forced ? (
+            <button
+              type="button"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push('/login');
+              }}
+              disabled={submitting}
+              className="w-full text-gray-600 hover:text-gray-900 text-sm py-2"
+            >
+              다른 계정으로 로그인하기
+            </button>
+          ) : (
             <button
               type="button"
               onClick={() => router.push('/dashboard')}

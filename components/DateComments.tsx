@@ -147,6 +147,14 @@ export default function DateComments({
             type="text"
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
+            onKeyDown={(e) => {
+              // 한글은 글자를 조합하는 중에도 엔터가 올라온다. 그대로 두면 그 엔터가
+              // 폼을 제출해서 "안녕하세"처럼 조합이 덜 끝난 채로 등록된다.
+              // (자유게시판 댓글에도 같은 처리가 들어가 있다.)
+              if (e.key === 'Enter' && e.nativeEvent.isComposing) {
+                e.preventDefault();
+              }
+            }}
             placeholder="댓글을 입력하세요..."
             disabled={submitting}
             className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"

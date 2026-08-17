@@ -14,6 +14,7 @@ import {
   type QuotaSetting,
 } from '@/lib/utils';
 import { Plus, Trash2, Pencil } from 'lucide-react';
+import QuotaGapNotice from './QuotaGapNotice';
 
 interface FormState {
   dispatchRate: string;
@@ -188,6 +189,9 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
 
   return (
     <div className="space-y-6">
+      {/* 앞으로 정원이 비는 날이 있으면, 고치는 자리에서 바로 보이도록 맨 위에 둔다. */}
+      <QuotaGapNotice settings={settings} />
+
       {showForm && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold mb-4 text-gray-900">

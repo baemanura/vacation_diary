@@ -166,8 +166,12 @@ export default function LeaveCalendar({
   // 막히면 null이 돌아와 취소가 조용히 중단되고, 서무 눈에는 버튼이 안 먹는 것처럼 보인다.
   // 그래서 사유는 화면 안의 입력칸으로 받는다.
   const requestCancel = (leave: LeaveRequest, dateToCancel: string) => {
+    // 처리 중에 한 번 더 누르면 같은 신청을 두 번 취소하려 들면서, 남는 구간을
+    // 두 번 등록하다 겹침 오류가 난다. 휴대폰에서는 두 번 눌리기 쉬워 여기서 막는다.
+    if (cancelling) return;
     if (leave.member_id === currentUserId) {
       if (!confirm(`정말 취소하시겠습니까?${cancelScopeNote(leave, dateToCancel)}`)) return;
+      setCancelling(true);
       void handleCancel(leave, dateToCancel, null);
       return;
     }
@@ -571,7 +575,8 @@ export default function LeaveCalendar({
                         {canCancel && (
                           <button
                             onClick={() => requestCancel(leave, selectedDate)}
-                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                            disabled={cancelling}
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:text-gray-300 rounded transition"
                             title="취소"
                           >
                             <Trash2 size={14} />
@@ -664,6 +669,7 @@ export default function LeaveCalendar({
         profiles={profiles}
         firstDay={monthFirstDay}
         lastDay={monthLastDay}
+        currentUserId={currentUserId}
       />
     </div>
   );
@@ -684,11 +690,13 @@ function MonthlyMemberSummary({
   profiles,
   firstDay,
   lastDay,
+  currentUserId,
 }: {
   leaves: LeaveRequest[];
   profiles: Map<string, Profile>;
   firstDay: string;
   lastDay: string;
+  currentUserId?: string;
 }) {
   // member별로 유형별 사용일수를 집계한다.
   const counts = new Map<string, Map<string, number>>();
@@ -707,48 +715,92 @@ function MonthlyMemberSummary({
     counts.set(leave.member_id, memberCounts);
   });
 
-  // 휴직자는 제외하고, 합계 사용일수가 많은 순으로 상위 5명만 보여준다.
-  const summary = Array.from(counts.entries())
+  const toRow = (memberId: string, byType: Map<string, number>) => ({
+    memberId,
+    name: profiles.get(memberId)?.name ?? '알 수 없음',
+    rank: profiles.get(memberId)?.rank ?? '',
+    byType: Array.from(byType.entries()),
+    totalDays: Array.from(byType.values()).reduce((sum, d) => sum + d, 0),
+  });
+
+  // 휴직자는 순위에서 제외한다. 한 달 내내 잡혀 있어 매번 1위가 되어버려서다.
+  const ranked = Array.from(counts.entries())
     .filter(([, byType]) => !byType.has('휴직'))
-    .map(([memberId, byType]) => ({
-      memberId,
-      name: profiles.get(memberId)?.name ?? '알 수 없음',
-      rank: profiles.get(memberId)?.rank ?? '',
-      byType: Array.from(byType.entries()),
-      totalDays: Array.from(byType.values()).reduce((sum, d) => sum + d, 0),
-    }))
-    .sort((a, b) => b.totalDays - a.totalDays || a.name.localeCompare(b.name, 'ko'))
-    .slice(0, 5);
+    .map(([memberId, byType]) => toRow(memberId, byType))
+    .sort((a, b) => b.totalDays - a.totalDays || a.name.localeCompare(b.name, 'ko'));
+
+  const top = ranked.slice(0, 5);
+
+  // 상위 5명에 들지 못하면 본인 사용일수를 확인할 곳이 어디에도 없다. 날짜를 하나씩
+  // 눌러가며 세는 수밖에 없으므로, 순위 밖이면 본인 몫을 따로 붙여준다.
+  // (휴직은 순위에서 빠지지만 본인 기록으로는 보여야 해서 원본에서 다시 찾는다.)
+  const myRank = currentUserId ? ranked.findIndex((m) => m.memberId === currentUserId) : -1;
+  const myCounts = currentUserId ? counts.get(currentUserId) : undefined;
+  const myRow = currentUserId && myCounts ? toRow(currentUserId, myCounts) : null;
+  // 상위 5명 안에 그려지지 않는 경우(순위 밖이거나, 순위 자체에 없는 경우)에만 따로 붙인다.
+  const showMineSeparately = Boolean(currentUserId) && (myRank < 0 || myRank >= top.length);
+
+  const Row = ({
+    row,
+    rankLabel,
+    mine,
+  }: {
+    row: ReturnType<typeof toRow>;
+    rankLabel: string;
+    mine: boolean;
+  }) => (
+    <div
+      className={`flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${
+        mine ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'
+      }`}
+    >
+      <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{rankLabel}</span>
+      <span className="font-medium text-gray-900">
+        {row.name} {row.rank}
+      </span>
+      {mine && (
+        <span className="text-xs font-semibold text-blue-700 px-1.5 py-0.5 rounded-full bg-blue-100">
+          나
+        </span>
+      )}
+      {row.byType.map(([type, days]) => (
+        <span
+          key={type}
+          className={`text-xs px-1.5 py-0.5 rounded-full ${
+            TYPE_BADGE_COLOR[type] ?? 'bg-gray-100 text-gray-700'
+          }`}
+        >
+          {type} {days}일
+        </span>
+      ))}
+      <span className="ml-auto text-xs text-gray-500">합계 {row.totalDays}일</span>
+    </div>
+  );
 
   return (
     <div className="mt-6 pt-6 border-t border-gray-200">
       <h3 className="font-semibold text-gray-900 mb-3">이달의 대원별 사용일수 (상위 5명)</h3>
-      {summary.length === 0 ? (
+      {top.length === 0 && !myRow ? (
         <p className="text-gray-500 text-sm">이번 달 사용 내역이 없습니다.</p>
       ) : (
         <div className="space-y-1.5">
-          {summary.map((m, index) => (
-            <div
+          {top.map((m, index) => (
+            <Row
               key={m.memberId}
-              className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-sm"
-            >
-              <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{index + 1}위</span>
-              <span className="font-medium text-gray-900">
-                {m.name} {m.rank}
-              </span>
-              {m.byType.map(([type, days]) => (
-                <span
-                  key={type}
-                  className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    TYPE_BADGE_COLOR[type] ?? 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {type} {days}일
-                </span>
-              ))}
-              <span className="ml-auto text-xs text-gray-500">합계 {m.totalDays}일</span>
-            </div>
+              row={m}
+              rankLabel={`${index + 1}위`}
+              mine={m.memberId === currentUserId}
+            />
           ))}
+
+          {showMineSeparately &&
+            (myRow ? (
+              <Row row={myRow} rankLabel={myRank >= 0 ? `${myRank + 1}위` : '—'} mine />
+            ) : (
+              <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-300 text-sm text-gray-600">
+                이번 달 내 사용 내역이 없습니다.
+              </div>
+            ))}
         </div>
       )}
     </div>

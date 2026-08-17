@@ -11,6 +11,7 @@ import BoardPosts from '@/components/BoardPosts';
 import OnlineUsers from '@/components/OnlineUsers';
 import InstallGuide from '@/components/InstallGuide';
 import NoticeBanner from '@/components/NoticeBanner';
+import QuotaGapNotice from '@/components/QuotaGapNotice';
 
 // 백엔드가 응답하지 않을 때 무한정 "로딩 중..."에 머물지 않도록 하는 상한.
 const LOAD_TIMEOUT_MS = 8000;
@@ -153,6 +154,9 @@ export default function DashboardPage() {
         <div className="space-y-8">
           {/* 서무가 지정한 공지. 모두가 읽어야 하는 내용이라 가장 위에 둔다. */}
           <NoticeBanner />
+
+          {/* 정원 설정이 곧 비면 알린다. 고칠 수 있는 사람은 서무뿐이라 서무에게만 보인다. */}
+          {profile?.role === 'admin' && <QuotaGapNotice />}
 
           {/* 홈 화면 추가 안내 (이미 앱으로 실행 중이거나 닫았으면 표시되지 않는다) */}
           <InstallGuide />

@@ -71,6 +71,25 @@ export function getQuotaForDate(settings: QuotaSetting[], date: string): QuotaSe
 }
 
 /**
+ * from부터 days일 안에서, 적용되는 정원 설정이 하나도 없는 첫 날짜를 찾는다.
+ * 전부 덮여 있으면 null.
+ *
+ * 종료일이 있는 설정만 있으면 그 다음날부터 달력의 색과 인원 표시가 통째로 사라지는데,
+ * 화면에는 "-"만 뜰 뿐이라 서무가 알아채기 어렵다. 미리 찾아서 알려주기 위한 것이다.
+ */
+export function findQuotaGapStart(
+  settings: QuotaSetting[],
+  from: string,
+  days: number
+): string | null {
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i);
+    if (!getQuotaForDate(settings, date)) return date;
+  }
+  return null;
+}
+
+/**
  * 두 설정의 적용 기간이 하루라도 겹치는지 본다.
  * 겹치면 그 날짜에 어느 설정을 쓸지 모호해지므로 저장 전에 막는다.
  */
