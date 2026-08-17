@@ -11,6 +11,7 @@ import {
   addDays,
   describeUnexpectedError,
   getTodayString,
+  occupiesQuota,
   type QuotaSetting,
 } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
@@ -22,6 +23,8 @@ interface LeaveRequest {
   end_date: string;
   type: string;
   sub_reason: string | null;
+  /** 휴직일 때만 채워진다. '3개월 이상'이면 정원에서 빠진다. */
+  absence_length: string | null;
   note: string | null;
   status: string;
   created_at: string;
@@ -143,6 +146,15 @@ export default function LeaveCalendar({
       return date >= leave.start_date && date <= leave.end_date;
     });
   };
+
+  // 그날 가능인원 한 자리를 실제로 차지하는 신청만. 색·인원수·남은인원의 기준이다.
+  //
+  // 3개월 이상 휴직은 부대 정원에서 아예 빠져 있어 가능인원을 줄이지 않는다. 그대로 세면
+  // 몇 달 내내 한 자리가 잠겨 실제로는 갈 수 있는 날이 노랑·빨강으로 보인다.
+  // 달력 칸에서도 빼는 이유는 하나 더 있다 — 휴직은 기간이 길어서, 세지 않고 이름만
+  // 남겨두면 반 년치 달력 모든 칸에 같은 이름이 박힌다.
+  const getQuotaOccupantsForDate = (date: string) =>
+    getRequestsForDate(date).filter(occupiesQuota);
 
   // 신청자 정보 가져오기
   const getRequesterInfo = (leave: LeaveRequest) => {
@@ -359,7 +371,7 @@ export default function LeaveCalendar({
   const referenceDate =
     selectedDate ?? (isTodayInThisMonth ? todayStr : `${year}-${String(month + 1).padStart(2, '0')}-01`);
   const referenceQuota = getQuotaForDate(quotaSettings, referenceDate);
-  const referenceCount = getRequestsForDate(referenceDate).length;
+  const referenceCount = getQuotaOccupantsForDate(referenceDate).length;
   const referenceRemaining = referenceQuota ? Math.max(referenceQuota.base_quota - referenceCount, 0) : null;
 
   return (
@@ -444,7 +456,7 @@ export default function LeaveCalendar({
           }
 
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const requests = getRequestsForDate(dateStr);
+          const requests = getQuotaOccupantsForDate(dateStr);
           const dayQuota = getQuotaForDate(quotaSettings, dateStr);
           const status =
             dayQuota && requests.length > 0
@@ -583,6 +595,16 @@ export default function LeaveCalendar({
                             반일(오전/오후)일 때만 눈에 띄게 표시한다. */}
                         {leave.sub_reason && leave.sub_reason !== '일반' && (
                           <span className="text-gray-600"> ({leave.sub_reason})</span>
+                        )}
+                        {leave.absence_length && (
+                          <span className="text-gray-600"> · {leave.absence_length}</span>
+                        )}
+                        {/* 왜 이 사람은 세지 않는지 여기서만 알 수 있으므로 분명히 적어둔다.
+                            달력 칸에는 아예 나오지 않는다. */}
+                        {!cancelled && !occupiesQuota(leave) && (
+                          <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700 font-medium">
+                            정원 제외
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">

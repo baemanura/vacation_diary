@@ -159,6 +159,41 @@ export function formatDateFromTimestamp(dateString: string) {
   });
 }
 
+export function addMonths(dateString: string, months: number) {
+  const [y, m, d] = dateString.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + months, d));
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * 휴직 기간 구분. 정원(가능인원)에 영향을 주는지가 여기서 갈린다.
+ *
+ * 3개월 이상 휴직은 부대 정원에서 아예 빠지므로 가능인원이 줄지 않는다.
+ * 3개월 미만은 자리가 그대로 남아 있는 상태라 그 사람 몫으로 한 자리가 묶인다.
+ * 예) 출동율 80%로 가능인원이 3명일 때, 3개월 이상 휴직자가 있어도 3명이 갈 수 있지만
+ *     3개월 미만 휴직자가 있으면 실질적으로 2명만 갈 수 있다.
+ */
+export const ABSENCE_LENGTHS = ['3개월 이상', '3개월 미만'];
+
+/** 이 값을 고른 휴직만 정원에서 빠진다. */
+export const QUOTA_EXEMPT_ABSENCE = '3개월 이상';
+
+/** 3개월(달력 기준)을 채우는 기간인지 본다. 신청 화면에서 고른 값과 대조하는 데 쓴다. */
+export function spansThreeMonths(startDate: string, endDate: string) {
+  return endDate >= addDays(addMonths(startDate, 3), -1);
+}
+
+/**
+ * 이 신청이 그날의 가능인원 한 자리를 차지하는지 본다.
+ *
+ * 연가·병가·교육·출장 등은 그날 근무에서 빠지는 것이라 모두 자리를 차지한다.
+ * 3개월 이상 휴직만 예외로, 정원 자체에서 빠져 있어 세지 않는다.
+ * (기간을 고르기 전에 등록된 예전 휴직은 값이 비어 있으므로 지금까지처럼 자리를 차지한다.)
+ */
+export function occupiesQuota(leave: { type: string; absence_length?: string | null }) {
+  return !(leave.type === '휴직' && leave.absence_length === QUOTA_EXEMPT_ABSENCE);
+}
+
 export const LEAVE_TYPES = ['연가', '병가', '공가', '특가', '교육', '출장', '휴직'];
 // 연가는 하루를 다 쓰는지(일반), 반일만 쓰는지(오전/오후)만 고른다.
 // 여행·결혼식 같은 구체적인 사정은 목록으로 못 다 담고 사생활이기도 해서,
