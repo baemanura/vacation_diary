@@ -20,10 +20,8 @@ interface Profile {
   rank: string;
 }
 
-const TOP_N = 5;
-
 /**
- * 그 달에 연가를 많이 쓴 대원 순위. 서무만 보는 화면이다.
+ * 그 달에 연가를 쓴 대원 전원의 사용일수 순위. 서무만 보는 화면이다.
  *
  * 원래 달력 맨 아래에 있었는데, 그 자리는 대원이 본인 신청을 확인하는 곳으로 바뀌었다.
  * 남의 사용량은 대원이 굳이 볼 것이 아니지만, 부대 전체의 사용량을 한눈에 보는 수단은
@@ -106,13 +104,12 @@ export default function MemberUsageSummary() {
       byType: Array.from(byType.entries()),
       totalDays: Array.from(byType.values()).reduce((sum, d) => sum + d, 0),
     }))
-    .sort((a, b) => b.totalDays - a.totalDays || a.name.localeCompare(b.name, 'ko'))
-    .slice(0, TOP_N);
+    .sort((a, b) => b.totalDays - a.totalDays || a.name.localeCompare(b.name, 'ko'));
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-lg font-semibold text-gray-900">대원별 사용일수 (상위 {TOP_N}명)</h3>
+        <h3 className="text-lg font-semibold text-gray-900">대원별 사용일수 ({ranked.length}명)</h3>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMonth(new Date(year, monthIndex - 1, 1))}
@@ -146,7 +143,9 @@ export default function MemberUsageSummary() {
               key={m.memberId}
               className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-sm"
             >
-              <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{index + 1}위</span>
+              <span className="w-8 shrink-0 text-xs font-bold text-gray-400 tabular-nums">
+                {index + 1}위
+              </span>
               <span className="font-medium text-gray-900">
                 {m.name} {m.rank}
               </span>

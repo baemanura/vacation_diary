@@ -9,6 +9,7 @@ import QuotaSettingsManager from '@/components/QuotaSettingsManager';
 import AccountManager from '@/components/AccountManager';
 import MemberList from '@/components/MemberList';
 import MemberUsageSummary from '@/components/MemberUsageSummary';
+import ProxyLeaveManager from '@/components/ProxyLeaveManager';
 import AdminGuide from '@/components/AdminGuide';
 
 // 백엔드가 응답하지 않을 때 무한정 "로딩 중..."에 머물지 않도록 하는 상한.
@@ -20,7 +21,9 @@ export default function AdminPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'quota' | 'account' | 'members' | 'usage'>('quota');
+  const [activeTab, setActiveTab] = useState<
+    'quota' | 'account' | 'members' | 'usage' | 'proxy'
+  >('quota');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -119,7 +122,7 @@ export default function AdminPage() {
       {/* 탭 네비게이션 */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* 탭이 넷이라 좁은 화면에서는 가로로 넘친다. 줄바꿈 대신 가로 스크롤로 둔다. */}
+          {/* 탭이 여럿이라 좁은 화면에서는 가로로 넘친다. 줄바꿈 대신 가로 스크롤로 둔다. */}
           <div className="flex gap-6 sm:gap-8 overflow-x-auto">
             <button
               onClick={() => setActiveTab('quota')}
@@ -161,6 +164,16 @@ export default function AdminPage() {
             >
               사용 현황
             </button>
+            <button
+              onClick={() => setActiveTab('proxy')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                activeTab === 'proxy'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              대리 입력
+            </button>
           </div>
         </div>
       </div>
@@ -174,6 +187,7 @@ export default function AdminPage() {
         {activeTab === 'account' && <AccountManager />}
         {activeTab === 'members' && <MemberList />}
         {activeTab === 'usage' && <MemberUsageSummary />}
+        {activeTab === 'proxy' && <ProxyLeaveManager />}
       </main>
     </div>
   );
