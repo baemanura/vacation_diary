@@ -29,12 +29,21 @@ export async function POST(request: NextRequest) {
 
     const { data: target, error: targetError } = await supabase
       .from('profiles')
-      .select('id, name, rank, role')
+      .select('id, name, rank, role, is_owner')
       .eq('id', memberId)
       .single();
 
     if (targetError || !target) {
       return NextResponse.json({ error: '해당 대원을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    // 전체 관리자는 부대원이 아니라 앱 전체를 보는 계정이다. 화면에서 지워둔 버튼을
+    // 우회해 요청이 들어올 수 있으므로 서버에서도 막는다.
+    if (target.is_owner) {
+      return NextResponse.json(
+        { error: '전체 관리자 계정은 이 화면에서 수정할 수 없습니다.' },
+        { status: 403 }
+      );
     }
 
     // 본인을 제외하고 같은 이름+계급이 이미 있는지 확인한다.
@@ -63,11 +72,13 @@ export async function POST(request: NextRequest) {
 
     // 마지막 서무를 일반 대원으로 내리면 아무도 관리 페이지에 못 들어간다.
     // 클라이언트 쪽 검사는 우회할 수 있으므로 여기서도 막는다.
+    // 전체 관리자는 서무 자리를 대신하는 계정이 아니므로 이 수에 넣지 않는다.
     if (target.role === 'admin' && role !== 'admin') {
       const { count, error: adminCountError } = await supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
-        .eq('role', 'admin');
+        .eq('role', 'admin')
+        .eq('is_owner', false);
 
       if (adminCountError) {
         return NextResponse.json(

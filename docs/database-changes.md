@@ -209,7 +209,9 @@ ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS absence_length text;
 (하나라도 겹치면 그 두 사람은 로그인할 수 없다). 이 계정이 만든 정원 설정 1건과 게시글
 1건은 그대로 남는다.
 
-현재 서무는 **`2제대 서무`**, **`송길호 경장`** 두 명이다.
+현재 서무는 **`2제대 서무`** 한 명이다. `송길호 경장`은 2026-09-17 기준으로 계정은 그대로
+있고 역할만 일반 대원으로 내려가 있다(삭제된 것이 아니다). 여기에 더해 부대원이 아닌
+**`통합 관리자`** 계정이 서무와 같은 권한으로 따로 있다 — 바로 위 `is_owner` 항목 참고.
 
 ### 2026-09-17 · 일근일 정원 추가 (`dayduty_bonus`)
 
@@ -235,6 +237,66 @@ ALTER TABLE quota_settings ADD COLUMN IF NOT EXISTS dayduty_bonus integer NOT NU
 
 > 근무 주기가 실제와 어긋나면 **`DUTY_CYCLE_ANCHOR` 한 줄만 고쳐서 배포**하면 된다.
 > 서무가 화면에서 고칠 수 있게 하는 것은 실제로 어긋나는 일이 생기면 그때 만들기로 했다.
+
+### 2026-09-17 · 전체 관리자 계정 (`is_owner`)
+
+앱을 만든 사람이 서무 계정으로 들어오면 실제 서무와 같은 계정을 동시에 쓰게 된다. 서무가
+비밀번호를 바꾸면 못 들어가고, 누가 무엇을 했는지도 구분되지 않는다. 그래서 **따로 들어오는
+계정**을 만들었다(`통합 관리자`).
+
+**역할(`role`)은 `admin` 그대로 두었다.** 권한은 앱 코드뿐 아니라 **DB의 RLS 정책들도
+`role = 'admin'`으로 판단하는데, 그 정책 원문을 서비스 롤 키로는 읽을 수 없다**
+(`multi-unit-plan.md`가 막혀 있는 것과 같은 이유). `'owner'` 같은 값을 새로 만들면 정책을
+전부 같이 고쳐야 하고, 하나라도 빠뜨리면 조용히 아무것도 못 하는 계정이 된다. 그래서 권한은
+서무와 똑같이 두고, **표시용 칸 하나만** 더했다.
+
+```sql
+-- 전체 관리자 표시. 권한이 아니라 "부대원이 아니라 앱 전체를 보는 계정"이라는 표시다.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_owner boolean NOT NULL DEFAULT false;
+
+-- 이 칸은 서버(서비스 롤)와 SQL 편집기에서만 바뀌어야 한다. 앱은 프로필을 서버 라우트로만
+-- 고치지만, 대원이 anon 키로 직접 REST를 쳐서 자기 행에 is_owner=true를 넣으면 목록에서
+-- 사라지고 서무가 손댈 수 없는 계정이 된다. 정책을 읽을 수 없으니 트리거로 막는다.
+-- SECURITY DEFINER를 쓰면 current_user가 함수 소유자로 바뀌어 검사 자체가 무의미해진다.
+CREATE OR REPLACE FUNCTION lock_profiles_is_owner() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_user IN ('service_role','postgres','supabase_admin') THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' THEN NEW.is_owner := false; ELSE NEW.is_owner := OLD.is_owner; END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS profiles_lock_is_owner ON profiles;
+CREATE TRIGGER profiles_lock_is_owner BEFORE INSERT OR UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION lock_profiles_is_owner();
+```
+
+> **세 덩어리를 따로 실행했다.** 한 번에 붙여넣으니 Supabase SQL 편집기가 마지막 줄을
+> `EXECUTE FUN);`으로 잘라 넣어 42601 오류가 났다(전체가 롤백된다). CREATE TRIGGER는
+> 한 줄로 붙여 두었다.
+
+**운영에서 실제로 확인한 것 (2026-09-17):**
+
+- 서비스 롤로 `is_owner=true` 저장 → 그대로 들어간다. 트리거가 서버 쓰기는 막지 않는다.
+- **전체 관리자 본인 토큰**으로 `is_owner=false` PATCH → HTTP 200에 행까지 돌아오지만 값은
+  `true` 그대로다. 서무는 프로필을 고칠 수 있어 UPDATE 자체는 통과하고 **트리거가 이 칸만
+  되돌린다.** 200이 돌아왔다고 바뀐 것이 아니다.
+- **임시 일반 대원 계정**으로 `role='admin'`, `is_owner=true`, 이름 변경을 각각 PATCH →
+  전부 **0건**. RLS가 조용히 막는다. 대원이 스스로 서무가 되는 길은 없다. 검사에 쓴 계정은
+  프로필·auth 모두 지웠다.
+
+계정 자체는 화면에서 만들 수 없다(계정 생성은 대원/서무만 고를 수 있다). **서비스 롤로 한 번
+만들고 끝낸다** — auth 계정 + `profiles` 행(`role='admin'`, `is_owner=true`)을 같이 넣는다.
+
+**이 계정이 다른 admin과 다른 점:**
+
+- 서무 화면의 **수정·비밀번호 초기화·삭제 버튼이 없고**, 세 라우트(`update-member`,
+  `reset-password`, `delete-member`)가 서버에서도 403으로 막는다. 화면만 가려두면 요청을
+  직접 만들어 우회할 수 있다.
+- **"마지막 서무" 검사에서 뺀다**(`.eq('is_owner', false)`). 넣으면 이 계정이 있다는 이유로
+  부대에 서무가 하나도 없는 상태가 허용된다.
+- **대리 입력 대상**과 사용 현황에서 빠진다. 연가를 쓰는 사람이 아니다.
+
+> 이 계정의 비밀번호를 잊으면 서무가 초기화해 줄 수 없다(위에서 막았다). Supabase 콘솔의
+> Authentication에서 직접 바꿔야 한다.
 
 ---
 

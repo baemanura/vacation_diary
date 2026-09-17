@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     const { data: target, error: targetError } = await supabase
       .from('profiles')
-      .select('id, name, rank, role')
+      .select('id, name, rank, role, is_owner')
       .eq('id', memberId)
       .single();
 
@@ -44,12 +44,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '해당 대원을 찾을 수 없습니다.' }, { status: 404 });
     }
 
+    // 전체 관리자는 삭제 대상이 아니다. 지워지면 되돌릴 방법이 Supabase 콘솔뿐이다.
+    if (target.is_owner) {
+      return NextResponse.json(
+        { error: '전체 관리자 계정은 삭제할 수 없습니다.' },
+        { status: 403 }
+      );
+    }
+
     // 마지막 서무를 지우면 아무도 관리 페이지에 들어갈 수 없게 된다.
+    // 전체 관리자는 서무 자리를 대신하는 계정이 아니므로 이 수에 넣지 않는다.
     if (target.role === 'admin') {
       const { count, error: countError } = await supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
-        .eq('role', 'admin');
+        .eq('role', 'admin')
+        .eq('is_owner', false);
 
       if (countError) {
         return NextResponse.json(

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { LogOut, Settings, KeyRound } from 'lucide-react';
-import { needsPasswordChange } from '@/lib/utils';
+import { needsPasswordChange, roleLabel } from '@/lib/utils';
 import LeaveCalendar from '@/components/LeaveCalendar';
 import LeaveRequestForm from '@/components/LeaveRequestForm';
 import BoardPosts from '@/components/BoardPosts';
@@ -117,7 +117,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">3기 2제 실시간 연가표</h1>
               <p className="text-gray-600">
-                {profile?.name} {profile?.rank} ({profile?.role === 'admin' ? '서무' : '대원'})
+                {profile?.name} {profile?.rank} ({roleLabel(profile)})
               </p>
             </div>
             <div className="flex gap-3">

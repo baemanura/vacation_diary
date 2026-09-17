@@ -20,12 +20,20 @@ export async function POST(request: NextRequest) {
 
     const { data: target, error: targetError } = await supabase
       .from('profiles')
-      .select('id, name, rank')
+      .select('id, name, rank, is_owner')
       .eq('id', memberId)
       .single();
 
     if (targetError || !target) {
       return NextResponse.json({ error: '해당 대원을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    // 전체 관리자의 비밀번호를 서무가 바꿔버리면 그 계정으로 들어갈 사람이 못 들어간다.
+    if (target.is_owner) {
+      return NextResponse.json(
+        { error: '전체 관리자 계정은 비밀번호를 초기화할 수 없습니다.' },
+        { status: 403 }
+      );
     }
 
     const newPassword = generateInitialPassword();

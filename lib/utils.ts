@@ -32,6 +32,29 @@ export function describeUnexpectedError(error: unknown, action: string) {
   );
 }
 
+/**
+ * 전체 관리자 계정인지. 권한 자체는 서무(role='admin')와 똑같고, 이 값은 "부대원이 아니라
+ * 앱 전체를 보는 계정"이라는 표시일 뿐이다.
+ *
+ * 역할을 새로 만들지 않은 이유: 권한은 DB의 RLS 정책들도 role='admin'으로 판단한다.
+ * 'owner' 같은 값을 만들면 그 정책을 전부 같이 고쳐야 하고, 하나라도 빠지면 조용히
+ * 권한이 없는 계정이 된다. 표시만 따로 두면 정책은 건드릴 필요가 없다.
+ *
+ * is_owner는 서비스 롤로만 바뀐다(트리거로 막아두었다 — docs/database-changes.md).
+ */
+export function isOwner(profile: { is_owner?: boolean | null } | null | undefined) {
+  return profile?.is_owner === true;
+}
+
+/** 화면에 보여줄 역할 이름. 목록에서는 일반 대원을 '일반'으로 부르기도 해서 인자로 받는다. */
+export function roleLabel(
+  profile: { role?: string | null; is_owner?: boolean | null } | null | undefined,
+  memberLabel = '대원'
+) {
+  if (isOwner(profile)) return '전체 관리자';
+  return profile?.role === 'admin' ? '서무' : memberLabel;
+}
+
 export function getQuotaStatus(current: number, base: number, max: number) {
   if (current <= base) {
     return { status: 'available', color: 'bg-green-100 text-green-800', label: '여유' };

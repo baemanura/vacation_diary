@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { daysBetweenInclusive, formatDateTime, TYPE_BADGE_COLOR } from '@/lib/utils';
+import { daysBetweenInclusive, formatDateTime, isOwner, TYPE_BADGE_COLOR } from '@/lib/utils';
 import {
   emptyLeaveInput,
   leaveWarnings,
@@ -17,6 +17,7 @@ interface Member {
   id: string;
   name: string;
   rank: string;
+  is_owner?: boolean | null;
 }
 
 interface LeaveRequest {
@@ -76,9 +77,10 @@ export default function ProxyLeaveManager() {
     const loadMembers = async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('id, name, rank')
+        .select('id, name, rank, is_owner')
         .order('name', { ascending: true });
-      setMembers(data ?? []);
+      // 전체 관리자는 부대원이 아니므로 대리 입력 대상에서 뺀다.
+      setMembers((data ?? []).filter((m) => !isOwner(m)));
     };
     void loadMembers();
   }, []);

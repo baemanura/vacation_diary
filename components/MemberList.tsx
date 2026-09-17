@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { describeUnexpectedError, formatDateFromTimestamp } from '@/lib/utils';
-import { Edit2, Trash2, KeyRound } from 'lucide-react';
+import { describeUnexpectedError, formatDateFromTimestamp, isOwner, roleLabel } from '@/lib/utils';
+import { Edit2, Trash2, KeyRound, Lock } from 'lucide-react';
 
 interface Member {
   id: string;
   name: string;
   rank: string;
   role: 'member' | 'admin';
+  /** 전체 관리자 계정. 부대원이 아니므로 서무가 고치거나 지울 수 없다. */
+  is_owner: boolean | null;
   created_at: string;
 }
 
@@ -50,9 +52,11 @@ export default function MemberList() {
 
   // 마지막 서무를 일반 대원으로 바꾸거나 삭제하면 아무도 관리 페이지에 들어갈 수 없게 된다.
   // 그러면 계정 생성·정원 설정이 전부 막혀 Supabase 대시보드에서 직접 고쳐야 하므로 미리 막는다.
+  // 전체 관리자는 이 수에서 뺀다. 서무 자리를 대신하는 계정이 아니라서, 남겨두면
+  // "전체 관리자가 있으니 괜찮다"고 판단해 부대에 서무가 하나도 없는 상태를 허용하게 된다.
   const isLastAdmin = (id: string) =>
-    members.filter((m) => m.role === 'admin').length <= 1 &&
-    members.some((m) => m.id === id && m.role === 'admin');
+    members.filter((m) => m.role === 'admin' && !isOwner(m)).length <= 1 &&
+    members.some((m) => m.id === id && m.role === 'admin' && !isOwner(m));
 
   const saveEdit = async (id: string) => {
     const name = editForm.name.trim();
@@ -314,12 +318,14 @@ export default function MemberList() {
                     ) : (
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          member.role === 'admin'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-gray-100 text-gray-800'
+                          isOwner(member)
+                            ? 'bg-indigo-100 text-indigo-800'
+                            : member.role === 'admin'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-gray-100 text-gray-800'
                         }`}
                       >
-                        {member.role === 'admin' ? '서무' : '일반'}
+                        {roleLabel(member, '일반')}
                       </span>
                     )}
                   </td>
@@ -327,7 +333,14 @@ export default function MemberList() {
                     {formatDateFromTimestamp(member.created_at)}
                   </td>
                   <td className="px-6 py-4 text-sm whitespace-nowrap">
-                    {editing ? (
+                    {isOwner(member) ? (
+                      // 전체 관리자는 부대원이 아니라 앱 전체를 보는 계정이다. 서무가 실수로
+                      // 지우거나 비밀번호를 바꿔버리면 되돌릴 방법이 Supabase 콘솔밖에 없다.
+                      <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <Lock size={14} />
+                        보호된 계정
+                      </span>
+                    ) : editing ? (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => saveEdit(member.id)}
