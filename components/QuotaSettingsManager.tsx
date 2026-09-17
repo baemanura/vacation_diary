@@ -10,6 +10,8 @@ import {
   DISPATCH_RATE_OPTIONS,
   BASE_QUOTA_BY_DISPATCH_RATE,
   DEFAULT_RESERVE_QUOTA,
+  DEFAULT_DAYDUTY_BONUS,
+  dayDutyBonusOf,
   QUOTA_CHOICES,
   type QuotaSetting,
 } from '@/lib/utils';
@@ -22,6 +24,7 @@ interface FormState {
   effectiveTo: string;
   baseQuota: number;
   reserveQuota: number;
+  dayDutyBonus: number;
 }
 
 const emptyForm = (): FormState => ({
@@ -30,6 +33,7 @@ const emptyForm = (): FormState => ({
   effectiveTo: '',
   baseQuota: BASE_QUOTA_BY_DISPATCH_RATE['80%'],
   reserveQuota: DEFAULT_RESERVE_QUOTA,
+  dayDutyBonus: DEFAULT_DAYDUTY_BONUS,
 });
 
 export default function QuotaSettingsManager({ currentUserId }: { currentUserId: string }) {
@@ -80,6 +84,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
       baseQuota: setting.base_quota,
       // 예비인원은 따로 저장하지 않고 총 한도와의 차이로 되돌린다.
       reserveQuota: Math.max(setting.max_quota - setting.base_quota, 0),
+      dayDutyBonus: dayDutyBonusOf(setting),
     });
     setShowForm(true);
   };
@@ -132,6 +137,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
         dispatch_rate: form.dispatchRate,
         base_quota: form.baseQuota,
         max_quota: totalQuota,
+        dayduty_bonus: form.dayDutyBonus,
       };
 
       if (editingId) {
@@ -239,7 +245,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
               종료일을 비워두면 다음 설정이 시작하기 전까지 계속 적용됩니다.
             </p>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">가능인원</label>
                 <select
@@ -274,10 +280,35 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                   {totalQuota}명
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">일근일 추가</label>
+                <select
+                  value={form.dayDutyBonus}
+                  onChange={(e) => setForm({ ...form, dayDutyBonus: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                >
+                  {QUOTA_CHOICES.map((n) => (
+                    <option key={n} value={n}>
+                      +{n}명
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <p className="text-xs text-gray-500">
               가능인원은 통상적으로 연가를 보낼 수 있는 인원, 예비인원은 혹시 모를 경우를 대비해
               남겨두는 인원입니다. <strong>총 한도는 두 값을 더해 자동으로 정해집니다.</strong>
+            </p>
+            <p className="text-xs text-gray-500">
+              <strong>일근일 추가</strong>는 우리 부대가 일근에 걸리는 날에만 가능인원과 총 한도에
+              함께 더해집니다. 예를 들어 가능인원 {form.baseQuota}명 · 총 한도 {totalQuota}명에
+              일근일 추가가 +{form.dayDutyBonus}명이면, 일근인 날은{' '}
+              <strong>
+                가능인원 {form.baseQuota + form.dayDutyBonus}명 · 총 한도{' '}
+                {totalQuota + form.dayDutyBonus}명
+              </strong>
+              이 됩니다. 달력에서는 그 날짜 옆에 작게 <strong>일</strong>이 붙습니다. 늘리지 않으려면
+              +0명으로 두세요.
             </p>
 
             <div className="flex gap-3">
@@ -319,16 +350,23 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
           <table className="min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['적용 기간', '출동율', '가능인원', '예비인원', '총 한도', '작성일', '작업'].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap"
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
+                {[
+                  '적용 기간',
+                  '출동율',
+                  '가능인원',
+                  '예비인원',
+                  '총 한도',
+                  '일근일 추가',
+                  '작성일',
+                  '작업',
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -348,6 +386,9 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
                     {setting.max_quota}명
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                    +{dayDutyBonusOf(setting)}명
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                     {formatDateFromTimestamp(setting.created_at)}

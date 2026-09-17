@@ -50,7 +50,43 @@ export interface QuotaSetting {
   dispatch_rate: string;
   base_quota: number;
   max_quota: number;
+  /**
+   * 우리 부대가 일근에 걸리는 날에만 더해지는 인원. 일근일에는 부대에 사람이 더 남아 있어
+   * 연가를 한 명 더 보낼 수 있다는 뜻이다. 서무가 정원 설정에서 기간마다 정한다.
+   * (컬럼을 추가하기 전에 만들어진 설정은 비어 있을 수 있어 null을 허용한다.)
+   */
+  dayduty_bonus: number | null;
   created_at: string;
+}
+
+/**
+ * 근무 주기의 기준일. 이 날이 일근이고, 그 뒤로 일근 → 당직 → 비번이 3일마다 반복된다.
+ * 부대 사정으로 주기가 하루 밀리면 이 날짜만 고치면 전체가 다시 맞는다.
+ *
+ * 이 날짜보다 앞선 날은 인사이동 전이라 편성이 달랐으므로 아무것도 표시하지 않는다.
+ */
+export const DUTY_CYCLE_ANCHOR = '2026-09-19';
+
+const DUTY_CYCLE = ['일근', '당직', '비번'] as const;
+export type DutyKind = (typeof DUTY_CYCLE)[number];
+
+/** 그 날 우리 부대의 근무. 기준일 이전이면 알 수 없으므로 null. */
+export function getDutyKind(date: string): DutyKind | null {
+  if (date < DUTY_CYCLE_ANCHOR) return null;
+  const elapsed = daysBetweenInclusive(DUTY_CYCLE_ANCHOR, date) - 1;
+  return DUTY_CYCLE[elapsed % DUTY_CYCLE.length];
+}
+
+/** 그 날 우리 부대가 일근인지. 달력의 '일' 표시와 정원 보정이 같은 기준을 쓴다. */
+export function isDayDuty(date: string) {
+  return getDutyKind(date) === '일근';
+}
+
+/** 정원 설정에 적힌 일근일 추가 인원. 비어 있으면 1명으로 본다. */
+export const DEFAULT_DAYDUTY_BONUS = 1;
+
+export function dayDutyBonusOf(setting: Pick<QuotaSetting, 'dayduty_bonus'>) {
+  return setting.dayduty_bonus ?? DEFAULT_DAYDUTY_BONUS;
 }
 
 // 날짜(date)에 실제로 적용되는 정원 설정을 찾는다.
@@ -68,6 +104,30 @@ export function getQuotaForDate(settings: QuotaSetting[], date: string): QuotaSe
     }
     return s.created_at > latest.created_at ? s : latest;
   });
+}
+
+/**
+ * 그 날짜에 실제로 적용할 정원. 우리 부대가 일근인 날은 가능인원과 총 한도가 함께 올라간다.
+ *
+ * 달력의 색, 가능인원·남은인원, 칸에 이름을 몇 명까지 펼칠지가 모두 같은 값을 봐야 하므로,
+ * 일근 보정은 이 한 곳에서만 한다. 화면은 getQuotaForDate 대신 항상 이 함수를 쓴다.
+ * (예비인원 = 총 한도 - 가능인원은 그대로 유지된다.)
+ */
+export function getEffectiveQuotaForDate(
+  settings: QuotaSetting[],
+  date: string
+): QuotaSetting | null {
+  const setting = getQuotaForDate(settings, date);
+  if (!setting || !isDayDuty(date)) return setting;
+
+  const bonus = dayDutyBonusOf(setting);
+  if (bonus === 0) return setting;
+
+  return {
+    ...setting,
+    base_quota: setting.base_quota + bonus,
+    max_quota: setting.max_quota + bonus,
+  };
 }
 
 /**

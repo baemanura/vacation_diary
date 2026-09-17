@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import {
   getQuotaStatus,
-  getQuotaForDate,
+  getEffectiveQuotaForDate,
+  isDayDuty,
   formatDateTime,
   daysBetweenInclusive,
   addDays,
@@ -371,7 +372,7 @@ export default function LeaveCalendar({
   const isTodayInThisMonth = todayStr.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`;
   const referenceDate =
     selectedDate ?? (isTodayInThisMonth ? todayStr : `${year}-${String(month + 1).padStart(2, '0')}-01`);
-  const referenceQuota = getQuotaForDate(quotaSettings, referenceDate);
+  const referenceQuota = getEffectiveQuotaForDate(quotaSettings, referenceDate);
   const referenceCount = getQuotaOccupantsForDate(referenceDate).length;
   const referenceRemaining = referenceQuota ? Math.max(referenceQuota.base_quota - referenceCount, 0) : null;
 
@@ -458,7 +459,7 @@ export default function LeaveCalendar({
 
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const requests = getQuotaOccupantsForDate(dateStr);
-          const dayQuota = getQuotaForDate(quotaSettings, dateStr);
+          const dayQuota = getEffectiveQuotaForDate(quotaSettings, dateStr);
           const status =
             dayQuota && requests.length > 0
               ? getQuotaStatus(requests.length, dayQuota.base_quota, dayQuota.max_quota)
@@ -474,7 +475,13 @@ export default function LeaveCalendar({
                   : 'border-gray-200 hover:border-gray-300'
               } ${status ? status.color : 'bg-white text-gray-600'}`}
             >
-              <div className="text-sm font-bold text-gray-900">{day}</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm font-bold text-gray-900">{day}</span>
+                {/* 우리 부대가 일근인 날. 날짜 옆의 작은 '일' 하나로만 알린다. */}
+                {isDayDuty(dateStr) && (
+                  <span className="text-[10px] font-semibold leading-none text-gray-500">일</span>
+                )}
+              </div>
               {requests.length > 0 && (
                 <div className="sm:hidden text-[10px] font-semibold text-gray-700 mt-0.5">
                   {requests.length}명
@@ -531,6 +538,14 @@ export default function LeaveCalendar({
               초과 <span className="text-gray-500">— 예비인원까지 초과</span>
             </span>
           </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded border border-gray-300 bg-white text-[10px] font-semibold text-gray-500">
+            일
+          </div>
+          <span className="text-sm">
+            일근 <span className="text-gray-500">— 우리 부대가 일근인 날. 가능인원이 늘어납니다.</span>
+          </span>
         </div>
       </div>
 
