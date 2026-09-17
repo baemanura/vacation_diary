@@ -314,6 +314,26 @@ export default function LeaveCalendar({
   // 서무가 특정 날짜에 신청한 사람들의 순번(1~5)을 지정/해제한다.
   const handleSetPriority = async (date: string, memberId: string, priority: number | null) => {
     try {
+      // 같은 날 같은 번호를 두 사람에게 주면, 날짜 상세가 순번으로 정렬되는 의미가 사라지고
+      // 서무가 정한 순서를 아무도 알 수 없게 된다. 저장 전에 막는다.
+      if (priority !== null) {
+        const mine = priorityKey(date, memberId);
+        const taken = Array.from(priorities.entries()).find(
+          ([key, value]) => value === priority && key.startsWith(`${date}|`) && key !== mine
+        );
+        if (taken) {
+          const other = profiles.get(taken[0].slice(date.length + 1));
+          alert(
+            `${priority}순위는 이미 ${other ? `${other.name} ${other.rank}` : '다른 대원'}에게 지정되어 있습니다.\n\n` +
+              '그 대원의 순번을 먼저 바꾸거나 해제한 뒤에 다시 지정해주세요.'
+          );
+          // 화면의 선택칸을 원래 값으로 되돌린다. 상태가 그대로면 고른 번호가 남아
+          // 저장된 것처럼 보인다.
+          await loadData();
+          return;
+        }
+      }
+
       if (priority === null) {
         const { error } = await supabase
           .from('leave_priorities')
