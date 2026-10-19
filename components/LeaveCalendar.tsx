@@ -489,7 +489,7 @@ export default function LeaveCalendar({
             <button
               key={day}
               onClick={() => setSelectedDate(dateStr)}
-              className={`min-h-16 sm:aspect-square sm:overflow-hidden p-1.5 rounded-lg border-2 transition flex flex-col items-start justify-start text-xs font-medium cursor-pointer ${
+              className={`min-h-16 sm:aspect-square sm:overflow-hidden px-0.5 py-1.5 sm:p-1.5 rounded-lg border-2 transition flex flex-col items-start justify-start text-xs font-medium cursor-pointer ${
                 selectedDate === dateStr
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
@@ -502,9 +502,19 @@ export default function LeaveCalendar({
                   <span className="text-[10px] font-semibold leading-none text-gray-500">일</span>
                 )}
               </div>
+              {/* 폰 화면: 칸이 좁아 유형은 빼고 이름만 전원 보여준다. 석 자 이름이 들어가도록
+                  이 화면에서만 칸의 좌우 여백을 줄였다. (버튼은 글자를 가운데 정렬하므로 날짜와
+                  줄을 맞추려고 왼쪽 정렬을 따로 준다.) */}
               {requests.length > 0 && (
-                <div className="sm:hidden text-[10px] font-semibold text-gray-700 mt-0.5">
-                  {requests.length}명
+                <div className="sm:hidden w-full mt-0.5 text-left">
+                  {requests.map((leave, idx) => (
+                    <div
+                      key={idx}
+                      className="text-[10px] font-semibold leading-tight truncate tracking-tighter"
+                    >
+                      {getRequesterInfo(leave).name}
+                    </div>
+                  ))}
                 </div>
               )}
               <div className="hidden sm:block w-full mt-0.5 space-y-0.5">
