@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import {
@@ -9,7 +9,6 @@ import {
   isDayDuty,
   formatDateTime,
   daysBetweenInclusive,
-  addDays,
   describeUnexpectedError,
   getTodayString,
   occupiesQuota,
@@ -46,9 +45,12 @@ const priorityKey = (date: string, memberId: string) => `${date}|${memberId}`;
 export default function LeaveCalendar({
   currentUserId,
   isAdmin = false,
+  refreshKey = 0,
 }: {
   currentUserId?: string;
   isAdmin?: boolean;
+  /** 바뀌면 보던 달과 선택한 날짜를 그대로 둔 채 다시 읽는다(신청 직후 등). */
+  refreshKey?: number;
 } = {}) {
   // 항상 "이번 달"로 시작한다. 고정 날짜를 쓰면 달이 바뀌어도 과거 달이 계속 보인다.
   // (대시보드가 로딩을 끝낸 뒤에야 이 컴포넌트를 렌더링하므로 서버/클라이언트 날짜가
@@ -66,24 +68,31 @@ export default function LeaveCalendar({
   const [cancelTarget, setCancelTarget] = useState<{ leaveId: string; date: string } | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  // 마지막 조회가 실패했는지. 실패하면 화면은 직전 내용을 그대로 두고 이 표시만 띄운다.
+  const [loadFailed, setLoadFailed] = useState(false);
+  // 달을 빨리 넘기면 앞 달 조회가 늦게 도착해 지금 달 화면을 덮을 수 있다. 지금 보고 있는
+  // 달을 적어두고, 다른 달을 위해 시작한 조회의 결과는 버린다.
+  // (같은 달의 조회끼리는 버리지 않는다 — 연결이 나쁠 때는 한 번 조회에 자동 새로고침
+  //  간격보다 오래 걸려서, 늦은 조회를 버리면 실패 표시가 영영 뜨지 않는다.)
+  const shownMonth = useRef('');
+  const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
 
   useEffect(() => {
+    shownMonth.current = monthKey(currentDate);
     loadData();
-  }, [currentDate]);
+  }, [currentDate, refreshKey]);
 
   // 다른 대원이 신청/취소하거나 서무가 순번·정원을 바꾸면 새로고침 없이 반영한다.
   useLiveRefresh(['leave_requests', 'leave_priorities', 'quota_settings'], () => loadData());
 
   const loadData = async () => {
+    const requestedMonth = monthKey(currentDate);
     try {
       // 정원 설정 전체 조회 (기간별로 다른 출동율이 적용될 수 있어 날짜별로 직접 계산한다)
       const { data: quota, error: quotaError } = await supabase
         .from('quota_settings')
         .select('*')
         .order('effective_from', { ascending: true });
-
-      if (quotaError) console.error('정원 설정 조회 실패:', quotaError);
-      setQuotaSettings(quota || []);
 
       // 현재 월의 연가 데이터 조회
       // (new Date(...).toISOString()로 만들면 한국 시간대에서 UTC 변환 때문에
@@ -104,8 +113,6 @@ export default function LeaveCalendar({
         .gte('end_date', firstDay)
         .order('created_at', { ascending: true });
 
-      if (leaveError) console.error('연가 조회 실패:', leaveError);
-
       // 이번 달 순번 설정 조회
       const { data: priorityData, error: priorityError } = await supabase
         .from('leave_priorities')
@@ -113,18 +120,30 @@ export default function LeaveCalendar({
         .gte('date', firstDay)
         .lte('date', lastDay);
 
-      if (priorityError) console.error('순번 조회 실패:', priorityError);
+      // 모든 프로필 조회
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, rank');
+
+      // supabase-js는 연결이 끊겨도 예외 대신 error를 돌려준다. 그대로 빈 값으로 덮으면
+      // 폰이 잠깐 끊긴 사이 달력이 "아무도 신청하지 않은 달"처럼 보인다. 하나라도
+      // 실패하면 직전 화면을 그대로 두고, 다음 자동 새로고침에서 다시 읽는다.
+      if (requestedMonth !== shownMonth.current) return;
+
+      const failure = quotaError ?? leaveError ?? priorityError ?? profileError;
+      if (failure) {
+        console.error('달력 조회 실패:', failure);
+        setLoadFailed(true);
+        return;
+      }
+      setLoadFailed(false);
+      setQuotaSettings(quota || []);
 
       const priorityMap = new Map<string, number>();
       priorityData?.forEach((p) => {
         priorityMap.set(priorityKey(p.date, p.member_id), p.priority);
       });
       setPriorities(priorityMap);
-
-      // 모든 프로필 조회
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, name, rank');
 
       const profileMap = new Map<string, Profile>();
       profileData?.forEach((p) => {
@@ -135,6 +154,7 @@ export default function LeaveCalendar({
       setLeaves(leaveData || []);
     } catch (error) {
       console.error('데이터 로드 실패:', error);
+      if (requestedMonth === shownMonth.current) setLoadFailed(true);
     }
   };
 
@@ -193,113 +213,38 @@ export default function LeaveCalendar({
     setCancelTarget({ leaveId: leave.id, date: dateToCancel });
   };
 
-  // 순번은 서무만 손댈 수 있게 막혀 있어서 브라우저에서 지우면 조용히 실패한다.
-  // 서버가 "본인이거나 서무"인지 확인한 뒤 지운다.
-  //
-  // 취소 자체는 이미 끝난 뒤에 부르는 것이라, 여기서 실패해도 취소를 되돌리지는 않는다.
-  // 다만 순번이 남은 채로 넘어가면 나중에 순서가 뒤집히므로 조용히 넘기지 않고 알린다.
-  const clearPriority = async (date: string, memberId: string) => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      if (!accessToken) return;
-
-      const response = await fetch('/api/leave/clear-priority', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ date, memberId }),
-      });
-
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        alert(
-          '취소는 완료됐지만 순번이 지워지지 않았습니다.\n' +
-            '이대로 다시 신청하면 예전 순위가 그대로 살아나므로 서무에게 알려주세요.\n' +
-            `${result.error ?? ''}`.trim()
-        );
-      }
-    } catch (error) {
-      console.error('순번 삭제 실패:', error);
-      alert(
-        '취소는 완료됐지만 순번이 지워지지 않았습니다.\n' +
-          '이대로 다시 신청하면 예전 순위가 그대로 살아나므로 서무에게 알려주세요.'
-      );
-    }
-  };
-
+  // 하루 취소는 서버에서 한다(app/api/leave/cancel-day). 남는 구간을 새 행으로 넣어야 하는데
+  // 브라우저에서는 남의 이름으로 넣을 수 없어 서무의 하루 취소가 막혔고, 새 행이 신청 시각과
+  // 휴직 기간 구분을 잃었다. 그날의 순번 정리도 서버가 함께 한다.
   const handleCancel = async (
     leave: LeaveRequest,
     dateToCancel: string,
     reason: string | null
   ) => {
-    // 겹치는 활성 신청을 막는 DB 제약조건 때문에, 남는 구간을 먼저 등록하면 아직
-    // 원래 범위 그대로인 row와 겹쳐서 실패한다. 그래서 원래 row를 취소되는 하루로
-    // 먼저 축소한 다음 남는 구간을 등록하고, 등록이 실패하면 원래 상태로 되돌린다.
-    const segments: { start_date: string; end_date: string }[] = [];
-    if (dateToCancel > leave.start_date) {
-      segments.push({ start_date: leave.start_date, end_date: addDays(dateToCancel, -1) });
-    }
-    if (dateToCancel < leave.end_date) {
-      segments.push({ start_date: addDays(dateToCancel, 1), end_date: leave.end_date });
-    }
-
     try {
-      const { data: cancelledRows, error: updateError } = await supabase
-        .from('leave_requests')
-        .update({
-          start_date: dateToCancel,
-          end_date: dateToCancel,
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancel_reason: reason,
-        })
-        .eq('id', leave.id)
-        .select();
-      if (updateError) throw updateError;
-      // 권한이 없으면 오류 없이 0건이 돌아온다. 성공으로 넘기면 취소되지 않았는데도
-      // 취소된 것처럼 보인다.
-      if (!cancelledRows || cancelledRows.length === 0) {
-        alert('취소하지 못했습니다. 본인 신청이거나 서무만 취소할 수 있습니다.');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        alert('로그인이 만료되었습니다. 다시 로그인해주세요.');
         return;
       }
 
-      if (segments.length > 0) {
-        const { error: insertError } = await supabase.from('leave_requests').insert(
-          segments.map((segment) => ({
-            member_id: leave.member_id,
-            type: leave.type,
-            sub_reason: leave.sub_reason,
-            note: leave.note,
-            start_date: segment.start_date,
-            end_date: segment.end_date,
-            status: 'active',
-          }))
-        );
-        if (insertError) {
-          // 남는 구간 등록에 실패했으면 원래 신청을 취소 전 상태로 되돌린다.
-          await supabase
-            .from('leave_requests')
-            .update({
-              start_date: leave.start_date,
-              end_date: leave.end_date,
-              status: 'active',
-              cancelled_at: null,
-              cancel_reason: null,
-            })
-            .eq('id', leave.id);
-          throw insertError;
-        }
-      }
+      const response = await fetch('/api/leave/cancel-day', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ leaveId: leave.id, date: dateToCancel, reason }),
+      });
+      const result = await response.json().catch(() => ({}));
 
-      // 취소가 확정된 뒤에 그 날짜의 순번을 지운다. 남겨두면 같은 날짜로 다시
-      // 신청했을 때 예전 순위가 되살아나 먼저 신청한 사람보다 앞에 서게 된다.
-      // (앞뒤 구간 등록이 실패해 되돌린 경우에는 여기까지 오지 않는다.)
-      if (leave.member_id) {
-        await clearPriority(dateToCancel, leave.member_id);
+      if (!response.ok) {
+        alert(result.error ?? `취소에 실패했습니다. [HTTP ${response.status}]`);
+        await loadData();
+        return;
       }
+      if (result.warning) alert(result.warning);
 
       setCancelTarget(null);
       await loadData();
@@ -458,6 +403,12 @@ export default function LeaveCalendar({
           </div>
         </div>
       </div>
+
+      {loadFailed && (
+        <p className="mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+          연결이 불안정해 최신 내용을 불러오지 못했습니다. 잠시 후 자동으로 다시 불러옵니다.
+        </p>
+      )}
 
       {/* 요일 헤더 */}
       <div className="grid grid-cols-7 gap-1 mb-2">

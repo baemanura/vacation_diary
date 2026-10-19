@@ -166,7 +166,7 @@ export default function DashboardPage() {
 
           {/* 달력 뷰 */}
           <LeaveCalendar
-            key={refreshKey}
+            refreshKey={refreshKey}
             currentUserId={user?.id}
             isAdmin={profile?.role === 'admin'}
           />
