@@ -546,39 +546,6 @@ export default function LeaveCalendar({
         })}
       </div>
 
-      {/* 범례 */}
-      <div className="mt-6 pt-4 border-t border-gray-200">
-        <div className="text-sm text-gray-600 mb-2">색상 안내:</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 shrink-0 rounded bg-green-100 border border-green-300"></div>
-            <span className="text-sm">
-              여유 <span className="text-gray-500">— 가능인원 이내</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 shrink-0 rounded bg-yellow-100 border border-yellow-300"></div>
-            <span className="text-sm">
-              주의 <span className="text-gray-500">— 예비인원까지 사용 중</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 shrink-0 rounded bg-red-100 border border-red-300"></div>
-            <span className="text-sm">
-              초과 <span className="text-gray-500">— 예비인원까지 초과</span>
-            </span>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded border border-gray-300 bg-white text-[10px] font-semibold text-gray-500">
-            일
-          </div>
-          <span className="text-sm">
-            일근 <span className="text-gray-500">— 우리 부대가 일근인 날. 가능인원이 늘어납니다.</span>
-          </span>
-        </div>
-      </div>
-
       {/* 선택된 날짜의 상세 정보 */}
       {selectedDate && (
         <div className="mt-6 pt-6 border-t border-gray-200">
@@ -835,7 +802,7 @@ function MyMonthlyRequests({
       </div>
 
       {mine.length === 0 ? (
-        <p className="text-gray-500 text-sm">이번 달 신청 내역이 없습니다.</p>
+        <p className="text-gray-500 text-sm">이 달 신청 내역이 없습니다.</p>
       ) : (
         <>
           <div className="space-y-1.5">
@@ -911,7 +878,7 @@ function MyMonthlyRequests({
       )}
 
       <p className="mt-2 text-xs text-gray-400">
-        달력 위 ◀ ▶ 로 달을 넘기면 그 달의 내역이 보입니다.
+        달력 위 화살표(‹ ›)로 달을 넘기면 그 달의 내역이 보입니다.
       </p>
     </div>
   );

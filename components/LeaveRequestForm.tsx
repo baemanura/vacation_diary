@@ -94,7 +94,7 @@ export default function LeaveRequestForm({ currentUserId, onSuccess }: { current
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-xl font-bold mb-6 text-gray-900">연가/병가 신청</h2>
+      <h2 className="text-xl font-bold mb-6 text-gray-900">연가·병가 등 신청</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <LeaveFields value={formData} onChange={setFormData} disabled={loading} />
