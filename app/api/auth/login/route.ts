@@ -2,6 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { mustChangePassword } from '@/lib/serverAuth';
 
+// 계정이나 비밀번호 문제가 아니라 서버 쪽 문제일 때 보여주는 문장.
+//
+// 예전에는 조회가 어떤 이유로 실패해도 "계정을 찾을 수 없습니다", 로그인이 어떤 이유로
+// 실패해도 "비밀번호가 일치하지 않습니다"로 바꿔 보여줬다. 그러면 Supabase가 잠들었거나
+// 잠깐 장애가 난 날 멀쩡한 대원들이 "계정이 지워졌다", "비번이 바뀌었다"며 서무를 찾고,
+// 서무는 비밀번호를 초기화하러 간다. 다시 시도하면 풀리는 문제라는 것을 알려준다.
+const SERVER_TROUBLE = '지금 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요. (계정이나 비밀번호 문제가 아닙니다)';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -40,10 +48,8 @@ export async function POST(request: NextRequest) {
       .eq('rank', rank);
 
     if (profileError) {
-      return NextResponse.json(
-        { error: '일치하는 계정을 찾을 수 없습니다.' },
-        { status: 401 }
-      );
+      console.error('로그인 프로필 조회 실패:', profileError);
+      return NextResponse.json({ error: SERVER_TROUBLE }, { status: 503 });
     }
 
     // .single()로 조회하면 동명이인(이름·계급이 모두 같은 경우)에 에러가 나서
@@ -71,7 +77,12 @@ export async function POST(request: NextRequest) {
       profile.id
     );
 
-    if (authError || !authUser.user) {
+    // 계정 자체가 없는 경우(404)만 계정 문제다. 나머지는 서버 문제로 본다.
+    if (authError && authError.status !== 404) {
+      console.error('로그인 계정 조회 실패:', authError);
+      return NextResponse.json({ error: SERVER_TROUBLE }, { status: 503 });
+    }
+    if (!authUser?.user) {
       return NextResponse.json(
         { error: '인증 정보를 찾을 수 없습니다.' },
         { status: 401 }
@@ -94,11 +105,25 @@ export async function POST(request: NextRequest) {
       password,
     });
 
-    if (signInError || !authData.session) {
-      return NextResponse.json(
-        { error: '비밀번호가 일치하지 않습니다.' },
-        { status: 401 }
-      );
+    if (signInError) {
+      // 비밀번호가 틀린 것은 Supabase가 400(invalid_credentials)으로 알려준다.
+      if (signInError.code === 'invalid_credentials' || signInError.status === 400) {
+        return NextResponse.json({ error: '비밀번호가 일치하지 않습니다.' }, { status: 401 });
+      }
+      // 로그인은 전부 이 서버를 거쳐 Supabase로 가므로, 짧은 시간에 여러 명이 몰리면
+      // 횟수 제한(429)이 부대 전체에 한꺼번에 걸릴 수 있다.
+      if (signInError.status === 429) {
+        return NextResponse.json(
+          { error: '지금 로그인하는 사람이 많아 잠시 막혔습니다. 1~2분 뒤 다시 시도해주세요. (비밀번호 문제가 아닙니다)' },
+          { status: 429 }
+        );
+      }
+      console.error('로그인 실패:', signInError);
+      return NextResponse.json({ error: SERVER_TROUBLE }, { status: 503 });
+    }
+    if (!authData.session) {
+      console.error('로그인 세션 없음:', profile.id);
+      return NextResponse.json({ error: SERVER_TROUBLE }, { status: 503 });
     }
 
     return NextResponse.json(
