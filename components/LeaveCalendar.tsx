@@ -709,7 +709,8 @@ export default function LeaveCalendar({
  * 지금 보고 있는 달에 걸친 내 신청을 건별로 보여준다.
  *
  * 달력만으로는 본인이 언제 무엇을 냈는지 알려면 날짜를 하나씩 눌러봐야 한다.
- * 취소한 건도 함께 보여준다 — 서무가 취소한 경우 그 사유를 여기서 바로 확인할 수 있다.
+ * 서무가 취소한 건도 함께 보여준다 — 그 사유를 여기서 바로 확인할 수 있다. 본인이 취소한
+ * 건은 접어 두고 버튼으로 펼친다.
  * 달력이 이미 이 달의 신청을 모두 들고 있으므로 따로 조회하지 않는다.
  */
 function MyMonthlyRequests({
@@ -725,14 +726,22 @@ function MyMonthlyRequests({
   monthName: string;
   currentUserId?: string;
 }) {
+  // 본인이 취소한 건은 접어 둔다. 날짜를 옮기려고 취소→재신청을 자주 해서(2026-09 기준 취소가
+  // 절반) 펼쳐 두면 유효한 신청보다 취소된 줄이 더 많아진다. 서무가 취소한 건(사유가 있는 건)은
+  // 접지 않는다 — 대원은 여기서만 그 사실과 이유를 알 수 있다.
+  const [showOwnCancelled, setShowOwnCancelled] = useState(false);
+
   if (!currentUserId) return null;
 
-  const mine = leaves
+  const all = leaves
     .filter((leave) => leave.member_id === currentUserId)
     .sort(
       (a, b) =>
         a.start_date.localeCompare(b.start_date) || a.created_at.localeCompare(b.created_at)
     );
+  const isOwnCancel = (leave: LeaveRequest) => leave.status !== 'active' && !leave.cancel_reason;
+  const ownCancelledCount = all.filter(isOwnCancel).length;
+  const mine = showOwnCancelled ? all : all.filter((leave) => !isOwnCancel(leave));
 
   // 이번 달에 걸친 날만 센다. 달을 걸친 신청은 이번 달 몫만 합계에 들어간다.
   const daysThisMonth = (leave: LeaveRequest) => {
@@ -741,7 +750,7 @@ function MyMonthlyRequests({
     return start > end ? 0 : daysBetweenInclusive(start, end);
   };
 
-  const totalDays = mine
+  const totalDays = all
     .filter((leave) => leave.status === 'active')
     .reduce((sum, leave) => sum + daysThisMonth(leave), 0);
 
@@ -752,10 +761,13 @@ function MyMonthlyRequests({
         <span className="text-sm text-gray-500">{monthName}</span>
       </div>
 
-      {mine.length === 0 ? (
+      {all.length === 0 ? (
         <p className="text-gray-500 text-sm">이 달 신청 내역이 없습니다.</p>
       ) : (
         <>
+          {mine.length === 0 && (
+            <p className="text-gray-500 text-sm">이 달 유효한 신청이 없습니다.</p>
+          )}
           <div className="space-y-1.5">
             {mine.map((leave) => {
               const cancelled = leave.status !== 'active';
@@ -820,6 +832,18 @@ function MyMonthlyRequests({
               );
             })}
           </div>
+
+          {ownCancelledCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowOwnCancelled((v) => !v)}
+              className="mt-2 text-xs text-gray-500 underline underline-offset-2"
+            >
+              {showOwnCancelled
+                ? '내가 취소한 내역 숨기기'
+                : `내가 취소한 내역 ${ownCancelledCount}건 보기`}
+            </button>
+          )}
 
           <div className="mt-3 text-sm text-gray-700">
             이번 달 합계 <strong className="font-semibold">{totalDays}일</strong>{' '}
