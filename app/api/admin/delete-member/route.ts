@@ -9,7 +9,9 @@ import { requireAdmin, isFailure } from '@/lib/serverAuth';
 //
 // 삭제 순서가 중요하다:
 //  - leave_priorities.set_by는 profiles를 참조하고 연쇄 삭제가 아니라서, 순번을 한 번이라도
-//    지정한 서무는 이걸 먼저 지우지 않으면 프로필 삭제 자체가 거부된다(23503).
+//    지정한 서무는 이걸 먼저 정리하지 않으면 프로필 삭제 자체가 거부된다(23503).
+//    예전에는 그 행을 지웠는데, 그러면 전출하는 서무가 지정해 둔 다른 대원들의 순번이
+//    통째로 사라졌다. 순번은 그 대원들의 것이므로 지정한 사람만 지우는 사람 앞으로 넘긴다.
 //  - quota_settings는 부대 공용 설정이라 사람과 함께 사라지면 안 된다. 만든이만 넘긴다.
 //  - 나머지는 연쇄 삭제에 맡기지 않고 직접 지운다. 몇 건을 지웠는지 돌려주기 위해서다.
 export async function POST(request: NextRequest) {
@@ -83,6 +85,18 @@ export async function POST(request: NextRequest) {
       deleted[table] = (deleted[table] ?? 0) + (data?.length ?? 0);
     };
 
+    // 다른 대원들의 순번은 살리고, 지정한 사람만 지우는 사람 앞으로 넘긴다.
+    const { error: priorityHandoverError } = await supabase
+      .from('leave_priorities')
+      .update({ set_by: user.id })
+      .eq('set_by', memberId);
+    if (priorityHandoverError) {
+      return NextResponse.json(
+        { error: `순번 이관 실패: ${priorityHandoverError.message}` },
+        { status: 400 }
+      );
+    }
+
     // 부대 공용 설정은 살리고 만든이만 지우는 사람 앞으로 넘긴다.
     const { error: quotaError } = await supabase
       .from('quota_settings')
@@ -100,7 +114,6 @@ export async function POST(request: NextRequest) {
       await wipe('board_comments', 'author_id');
       await wipe('board_posts', 'author_id');
       await wipe('date_comments', 'author_id');
-      await wipe('leave_priorities', 'set_by');
       await wipe('leave_priorities', 'member_id');
       await wipe('leave_requests', 'member_id');
     } catch (error) {
@@ -125,7 +138,7 @@ export async function POST(request: NextRequest) {
         {
           error:
             `대원 정보는 삭제됐지만 로그인 계정이 남았습니다: ${authDeleteError.message}\n` +
-            '다시 시도하거나 관리자에게 알려주세요.',
+            '대원 정보가 이미 없어 다시 시도해도 지워지지 않습니다. 전체 관리자에게 알려주세요(Supabase 콘솔에서 정리해야 합니다).',
         },
         { status: 500 }
       );
