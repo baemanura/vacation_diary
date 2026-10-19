@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { findQuotaGapStart, getTodayString, type QuotaSetting } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
@@ -71,6 +72,16 @@ export default function QuotaGapNotice({ settings }: { settings?: QuotaSetting[]
           새로 추가하거나, 지금 설정의 <strong className="font-semibold">적용 종료일을 비워두면</strong>{' '}
           다음 설정이 생길 때까지 계속 적용됩니다.
         </p>
+        {/* 경고만 띄워서는 아무도 고치지 않았다(2026-09-05~16 공백이 12일 그대로 지나갔다).
+            고치는 화면으로 바로 갈 수 있게 한다. 관리 페이지는 정원 설정 탭으로 열린다. */}
+        {!settings && (
+          <Link
+            href="/admin"
+            className="mt-2 inline-block rounded-lg bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700"
+          >
+            정원 설정 고치러 가기
+          </Link>
+        )}
       </div>
     </div>
   );

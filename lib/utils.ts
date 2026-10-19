@@ -173,16 +173,57 @@ export function findQuotaGapStart(
 }
 
 /**
- * 두 설정의 적용 기간이 하루라도 겹치는지 본다.
- * 겹치면 그 날짜에 어느 설정을 쓸지 모호해지므로 저장 전에 막는다.
+ * 첫 설정이 시작한 날부터 정원 설정이 하나도 적용되지 않는 기간을 모두 찾는다(지난 기간 포함).
+ * 마지막 설정에 종료일이 있으면 그 다음날부터 끝없이 빈 것이므로 end가 null인 기간으로 돌려준다.
+ *
+ * findQuotaGapStart는 "곧 빌 날"만 찾아 경고에 쓰고, 이것은 정원 설정 이력에 빈 기간을
+ * 줄로 끼워 보여주는 데 쓴다. 지나간 공백(예: 2026-09-05~09-16)도 여기서만 눈에 띈다.
+ */
+export function findQuotaGaps(
+  settings: QuotaSetting[]
+): { start: string; end: string | null }[] {
+  if (settings.length === 0) return [];
+  const starts = settings.map((q) => q.effective_from).sort();
+  const ends = settings.map((q) => q.effective_to).filter((d): d is string => !!d).sort();
+  const first = starts[0];
+  const lastStart = starts[starts.length - 1];
+  const lastEnd = ends.length > 0 ? ends[ends.length - 1] : lastStart;
+  // 마지막으로 무언가 바뀌는 날의 다음날까지 보면, 그 뒤는 그날과 똑같다.
+  const scanTo = addDays(lastEnd > lastStart ? lastEnd : lastStart, 1);
+
+  const gaps: { start: string; end: string | null }[] = [];
+  let open: string | null = null;
+  for (let d = first; d <= scanTo; d = addDays(d, 1)) {
+    const covered = getQuotaForDate(settings, d) !== null;
+    if (!covered && !open) open = d;
+    if (covered && open) {
+      gaps.push({ start: open, end: addDays(d, -1) });
+      open = null;
+    }
+  }
+  // 훑은 마지막 날까지 비어 있으면 그 뒤로는 어떤 설정도 시작하지 않으므로 끝없이 빈다.
+  if (open) gaps.push({ start: open, end: null });
+  return gaps;
+}
+
+/**
+ * 두 설정이 같은 날짜를 두고 다투는지 본다. 다투면 그 날짜에 어느 설정을 쓸지 모호해지므로
+ * 저장 전에 막는다.
+ *
+ * 종료일이 없는 설정은 "다음 설정이 시작하기 전까지" 적용된다(getQuotaForDate가 늦게 시작한
+ * 설정을 고른다). 그래서 종료일 없는 앞 설정 뒤에 새 설정을 넣는 것은 다투는 것이 아니다.
+ * 예전에는 종료일 없음을 9999-12-31로 보아 이것까지 막았고, 서무는 앞 설정에 종료일을 먼저
+ * 넣어야 했다 — 그러다 종료일을 넣은 채 다음 설정을 잊으면 그 뒤가 통째로 빈다.
+ * 시작일이 같은 두 설정과, 종료일이 있는 앞 설정의 기간 안에서 시작하는 설정은 여전히 막는다.
  */
 export function quotaPeriodsOverlap(
   a: { effective_from: string; effective_to: string | null },
   b: { effective_from: string; effective_to: string | null }
 ) {
-  const aEnd = a.effective_to ?? '9999-12-31';
-  const bEnd = b.effective_to ?? '9999-12-31';
-  return a.effective_from <= bEnd && b.effective_from <= aEnd;
+  if (a.effective_from === b.effective_from) return true;
+  const [earlier, later] = a.effective_from < b.effective_from ? [a, b] : [b, a];
+  if (!earlier.effective_to) return false;
+  return later.effective_from <= earlier.effective_to;
 }
 
 // "오늘"을 로컬 날짜 문자열로 반환한다. new Date().toISOString()로 만들면

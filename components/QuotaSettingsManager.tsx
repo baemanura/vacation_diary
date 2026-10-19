@@ -12,10 +12,13 @@ import {
   DEFAULT_RESERVE_QUOTA,
   DEFAULT_DAYDUTY_BONUS,
   dayDutyBonusOf,
+  findQuotaGaps,
+  getQuotaForDate,
+  daysBetweenInclusive,
   QUOTA_CHOICES,
   type QuotaSetting,
 } from '@/lib/utils';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, AlertTriangle } from 'lucide-react';
 import QuotaGapNotice from './QuotaGapNotice';
 
 interface FormState {
@@ -69,10 +72,31 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
 
   const totalQuota = form.baseQuota + form.reserveQuota;
 
-  const openNew = () => {
+  // 빈 기간 줄의 '이 기간 설정 추가'는 그 기간으로 날짜를 채워서 연다. 인원은 기본값이 아니라
+  // 빈 기간 바로 앞 설정의 값으로 채운다 — 기본값(80% · 가능 3명 · 예비 2명)이 지금 부대 정원과
+  // 다를 때 그대로 저장하면 엉뚱한 정원이 들어간다. 이어지는 기간은 대개 앞과 같다.
+  const openNew = (period?: { start: string; end: string | null }) => {
     setEditingId(null);
-    setForm(emptyForm());
+    if (!period) {
+      setForm(emptyForm());
+    } else {
+      const before = settings
+        .filter((s) => s.effective_from < period.start)
+        .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+      setForm({
+        ...emptyForm(),
+        ...(before && {
+          dispatchRate: before.dispatch_rate,
+          baseQuota: before.base_quota,
+          reserveQuota: Math.max(before.max_quota - before.base_quota, 0),
+          dayDutyBonus: dayDutyBonusOf(before),
+        }),
+        effectiveFrom: period.start,
+        effectiveTo: period.end ?? '',
+      });
+    }
     setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const openEdit = (setting: QuotaSetting) => {
@@ -193,6 +217,15 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
     return <div className="text-gray-600">로딩 중...</div>;
   }
 
+  // 이력에 설정과 빈 기간을 날짜순(최근이 위)으로 섞어 보여준다. 빈 기간은 달력이 색 없이
+  // '-'로만 보이는 날들이라, 표에서 줄로 보여야 서무가 날짜를 하나하나 비교하지 않아도 안다.
+  const today = getTodayString();
+  const current = getQuotaForDate(settings, today);
+  const historyRows = [
+    ...settings.map((setting) => ({ kind: 'setting' as const, start: setting.effective_from, setting })),
+    ...findQuotaGaps(settings).map((gap) => ({ kind: 'gap' as const, start: gap.start, gap })),
+  ].sort((a, b) => b.start.localeCompare(a.start));
+
   return (
     <div className="space-y-6">
       {/* 앞으로 정원이 비는 날이 있으면, 고치는 자리에서 바로 보이도록 맨 위에 둔다. */}
@@ -242,7 +275,8 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
               </div>
             </div>
             <p className="text-xs text-gray-500">
-              종료일을 비워두면 다음 설정이 시작하기 전까지 계속 적용됩니다.
+              종료일을 비워두면 다음 설정이 시작하기 전까지 계속 적용됩니다. 출동율이 바뀌면 앞
+              설정은 그대로 두고 새 설정만 추가하면 됩니다.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -337,7 +371,7 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
           <h3 className="text-lg font-semibold text-gray-900">정원 설정 이력</h3>
           {!showForm && (
             <button
-              onClick={openNew}
+              onClick={() => openNew()}
               className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition"
             >
               <Plus size={18} />
@@ -370,49 +404,94 @@ export default function QuotaSettingsManager({ currentUserId }: { currentUserId:
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {settings.map((setting) => (
-                <tr key={setting.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                    {setting.effective_from} ~ {setting.effective_to ?? '계속 적용'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                    {setting.dispatch_rate}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                    {setting.base_quota}명
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                    +{Math.max(setting.max_quota - setting.base_quota, 0)}명
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                    {setting.max_quota}명
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                    +{dayDutyBonusOf(setting)}명
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
-                    {formatDateFromTimestamp(setting.created_at)}
-                  </td>
-                  <td className="px-6 py-4 text-sm whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => openEdit(setting)}
-                        className="text-blue-600 hover:text-blue-700 transition"
-                        title="수정"
-                      >
-                        <Pencil size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(setting)}
-                        className="text-red-600 hover:text-red-700 transition"
-                        title="삭제"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {historyRows.map((row) => {
+                if (row.kind === 'gap') {
+                  const { gap } = row;
+                  const past = gap.end !== null && gap.end < today;
+                  return (
+                    <tr key={`gap-${gap.start}`} className={past ? 'bg-gray-50' : 'bg-amber-50'}>
+                      <td colSpan={8} className="px-6 py-3 text-sm">
+                        {/* 폰에서는 표를 옆으로 밀어 봐야 해서, 이 줄의 내용은 화면 왼쪽에 붙여 둔다.
+                            그러지 않으면 '이 기간 설정 추가'가 밀어야만 보이는 자리로 간다. */}
+                        <div className="sticky left-6 max-w-[calc(100vw-6rem)] sm:max-w-none space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span
+                              className={`flex items-center gap-1.5 font-semibold ${past ? 'text-gray-700' : 'text-amber-900'}`}
+                            >
+                              <AlertTriangle size={16} className="shrink-0" />
+                              {gap.start} ~ {gap.end ?? ''} 정원 설정 없음
+                              {gap.end && ` (${daysBetweenInclusive(gap.start, gap.end)}일)`}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openNew(gap)}
+                              className="text-blue-600 hover:text-blue-700 font-semibold whitespace-nowrap"
+                            >
+                              이 기간 설정 추가
+                            </button>
+                          </div>
+                          <p className="text-gray-600">
+                            {past
+                              ? '지난 기간이라 달력에 색과 인원이 비어 있습니다. 그때 출동율을 알면 채워주세요.'
+                              : gap.end === null
+                                ? '이날부터 달력에 색과 인원이 표시되지 않습니다. 바로 아래 설정을 수정해 종료일을 비우거나, 새 설정을 추가하세요.'
+                                : '이 기간 달력에 색과 인원이 표시되지 않습니다.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                const { setting } = row;
+                return (
+                  <tr key={setting.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      {setting.effective_from} ~ {setting.effective_to ?? '계속 적용'}
+                      {current?.id === setting.id && (
+                        <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                          오늘 적용 중
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      {setting.dispatch_rate}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      {setting.base_quota}명
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      +{Math.max(setting.max_quota - setting.base_quota, 0)}명
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      {setting.max_quota}명
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                      +{dayDutyBonusOf(setting)}명
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                      {formatDateFromTimestamp(setting.created_at)}
+                    </td>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openEdit(setting)}
+                          className="text-blue-600 hover:text-blue-700 transition"
+                          title="수정"
+                        >
+                          <Pencil size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(setting)}
+                          className="text-red-600 hover:text-red-700 transition"
+                          title="삭제"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
